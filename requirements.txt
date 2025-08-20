@@ -1,0 +1,4 @@
+mowl-borg
+wget
+class-resolver==0.5.4
+wandb
