@@ -195,11 +195,18 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     entity_representations = model.entity_representations[0]
     entity_to_id = triples_factory.entity_to_id
 
-    
+    logger.info("Pre-computing gene phenotype vectors...")
+    gene_pheno_vectors = {}
+    for gene, phenos in tqdm(gene2pheno.items()):
+        pheno_ids = [entity_to_id[p] for p in phenos if p in entity_to_id]
+        if pheno_ids:
+            pheno_vectors = entity_representations(th.tensor(pheno_ids).to(entity_representations.device))
+            gene_pheno_vectors[gene] = pheno_vectors
+
     with get_context("spawn").Pool(14) as pool:
         results = []
         with tqdm(total=len(test_pairs), desc='Evaluating test diseases') as pbar:
-            for output in pool.imap_unordered(partial(process_disease, disease2pheno, gene2pheno, entity_representations, entity_to_id), test_pairs, chunksize=10):
+            for output in pool.imap_unordered(partial(process_disease, disease2pheno, gene2pheno, gene_pheno_vectors, entity_representations, entity_to_id), test_pairs, chunksize=10):
                 results.append(output)
                 pbar.update()
 
@@ -211,7 +218,7 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
 
             
 
-def process_disease(disease2pheno, gene2pheno, entity_representations, entity_to_id, test_pair):
+def process_disease(disease2pheno, gene2pheno, gene_pheno_vectors, entity_representations, entity_to_id, test_pair):
     test_disease, test_gene = test_pair
     disease_phenos = disease2pheno[test_disease]
     disease_phenos_vectors = []
@@ -223,16 +230,14 @@ def process_disease(disease2pheno, gene2pheno, entity_representations, entity_to
     gene_index = list(gene2pheno.keys()).index(test_gene)
 
     scores = []
-    for gene, gene_phenos in tqdm(gene2pheno.items(), leave=False):
-        gene_phenos_vectors = []
-        for pheno in gene_phenos:
-            pheno_id = entity_to_id[pheno]
-            pheno_vector = entity_representations(th.tensor([pheno_id]).to(entity_representations.device))
-            gene_phenos_vectors.append(pheno_vector)
-
-        score = compare(th.vstack(gene_phenos_vectors), th.vstack(disease_phenos_vectors))
+    for gene in gene2pheno.keys():
+        if gene in gene_pheno_vectors:
+            gene_phenos_vectors = gene_pheno_vectors[gene]
+            score = compare(gene_phenos_vectors, th.vstack(disease_phenos_vectors))
+        else:
+            score = 0.0 # Or some other default score
         scores.append(score)
-    return (gene, disease, gene_index, scores)
+    return (list(gene2pheno.keys())[0], test_disease, gene_index, scores)
         
     
 def compare(gene_phenos_vectors, disease_phenos_vectors, criterion="bma"):
