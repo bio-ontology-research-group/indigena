@@ -199,40 +199,43 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
         pheno_vectors = entity_embeddings[th.tensor(pheno_ids)]
         gene_to_pheno_vectors[gene] = pheno_vectors
 
-    # Number of processes for gene parallelization
+    # Number of processes for disease parallelization
     num_processes = 40
     
+    # Create gene indices mapping for faster lookup
+    gene_to_index = {gene: i for i, gene in enumerate(eval_genes)}
+    
+    # Process test pairs in batches for better parallelization
+    batch_size = 10  # Process multiple diseases in each batch
+    test_pair_batches = [test_pairs[i:i+batch_size] for i in range(0, len(test_pairs), batch_size)]
+    
     results = []
-    # Process each test pair (disease) serially
-    with tqdm(total=len(test_pairs), desc='Evaluating test diseases') as pbar:
-        for test_pair in test_pairs:
-            test_disease, test_gene = test_pair
-            disease_phenos = disease2pheno[test_disease]
+    with tqdm(total=len(test_pairs), desc='Evaluating test pairs') as pbar:
+        for batch in test_pair_batches:
+            batch_args = []
+            for test_pair in batch:
+                test_disease, test_gene = test_pair
+                disease_phenos = disease2pheno[test_disease]
+                
+                # Get disease phenotype vectors
+                pheno_ids = [entity_to_id[pheno] for pheno in disease_phenos if pheno in entity_to_id]
+                if not pheno_ids:
+                    # No phenotypes found for this disease
+                    results.append((test_gene, test_disease, -1, [0.0] * len(eval_genes)))
+                    pbar.update()
+                    continue
+                
+                disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
+                gene_index = gene_to_index[test_gene]
+                
+                batch_args.append((test_gene, test_disease, gene_index, disease_phenos_vectors, gene_to_pheno_vectors, eval_genes))
             
-            # Get disease phenotype vectors
-            pheno_ids = [entity_to_id[pheno] for pheno in disease_phenos if pheno in entity_to_id]
-            if not pheno_ids:
-                # No phenotypes found for this disease
-                results.append((test_gene, test_disease, -1, [0.0] * len(eval_genes)))
-                pbar.update()
-                continue
-            
-            disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
-            gene_index = eval_genes.index(test_gene)
-
-            indexed_genes = [(i, gene) for i, gene in enumerate(eval_genes)]
-            
-            # Process gene chunks in parallel
-            with get_context("spawn").Pool(num_processes) as pool:
-                disease_results = []
-                with tqdm(total=len(eval_genes), desc=f'Processing disease {test_disease}', leave=False) as pbar_gene:
-                    for output in pool.imap_unordered(partial(process_gene, gene_to_pheno_vectors, disease_phenos_vectors), indexed_genes, chunksize=20):
-                        disease_results.append(output)
-                        pbar_gene.update()
-
-            scores = sorted(disease_results, key=lambda x: x[0])
-            results.append((test_gene, test_disease, gene_index, scores))
-            pbar.update()
+            # Process diseases in parallel
+            if batch_args:
+                with get_context("spawn").Pool(min(num_processes, len(batch_args))) as pool:
+                    batch_results = pool.map(process_disease_parallel, batch_args)
+                    results.extend(batch_results)
+                    pbar.update(len(batch_args))
 
     results_out_file = f"data/kge_results_{model_name}_fold_{fold}_results.txt"
     with open(results_out_file, "w") as f:
@@ -242,17 +245,33 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
 
             
 
-def process_gene(gene_to_pheno_vectors, disease_phenos_vectors, indexed_gene):
-    """Process a chunk of genes against a disease's phenotype vectors."""
-    index, gene = indexed_gene
+def process_disease_parallel(args):
+    """Process a disease against all genes in parallel."""
+    test_gene, test_disease, gene_index, disease_phenos_vectors, gene_to_pheno_vectors, eval_genes = args
     
-    gene_phenos_vectors = gene_to_pheno_vectors[gene]
-    score = compare(gene_phenos_vectors, disease_phenos_vectors)
-    return index, score
-        
+    # Compute scores for all genes at once
+    all_scores = []
+    # Process genes in batches to avoid memory issues
+    gene_batch_size = 500
+    gene_batches = [eval_genes[i:i+gene_batch_size] for i in range(0, len(eval_genes), gene_batch_size)]
     
+    for gene_batch in gene_batches:
+        batch_scores = []
+        for gene in gene_batch:
+            gene_phenos_vectors = gene_to_pheno_vectors[gene]
+            score = compare(gene_phenos_vectors, disease_phenos_vectors)
+            batch_scores.append(score)
+        all_scores.extend(batch_scores)
+    
+    return (test_gene, test_disease, gene_index, all_scores)
+
 def compare(gene_phenos_vectors, disease_phenos_vectors, criterion="bma"):
-    # Compute similarity matrix more efficiently
+    """Compute similarity between gene and disease phenotype vectors."""
+    # Handle empty vectors
+    if len(gene_phenos_vectors) == 0 or len(disease_phenos_vectors) == 0:
+        return 0.0
+        
+    # Compute similarity matrix efficiently
     sim_matrix = th.sigmoid(gene_phenos_vectors @ disease_phenos_vectors.T)
     
     if criterion == "bma":
