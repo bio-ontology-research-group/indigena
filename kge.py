@@ -194,7 +194,7 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
 
         
     entity_ids = th.tensor(list(triples_factory.entity_to_id.values()))
-    entity_embeddings = model.entity_representations[0](indices=entity_ids).cpu().detach().numpy()
+    entity_embeddings = model.entity_representations[0](indices=entity_ids).cpu().detach()
     entity_to_id = triples_factory.entity_to_id
 
     logger.info("Pre-computing gene phenotype vectors...")
