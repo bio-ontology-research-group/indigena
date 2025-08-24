@@ -151,19 +151,6 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
 
     model.load_state_dict(th.load(f"data/model_{model_name}_fold_{fold}.pt"))
     
-    # indexed_preds = [(i, preds[i]) for i in range(len(preds))]
-
-    # with get_context("spawn").Pool(50) as p:
-        # results = []
-        # with tqdm(total=len(preds), desc='Propagating annotations') as pbar:
-            # for output in p.imap_unordered(partial(propagate_annots, go=go, terms_dict=terms_dict), indexed_preds, chunksize=200):
-                # results.append(output)
-                # pbar.update()
-
-        # unordered_preds = [pred for pred in results]
-        # ordered_preds = sorted(unordered_preds, key=lambda x: x[0])
-        # preds = [pred[1] for pred in ordered_preds]
-
     gene2pheno = dict()
     for _, row in gene_phenotypes.iterrows():
         gene = row['Gene']
@@ -179,6 +166,13 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
         if disease not in disease2pheno:
             disease2pheno[disease] = []
         disease2pheno[disease].append(phenotype)
+
+
+
+    all_gene_diseases = pd.read_csv("data/gene_diseases.csv")
+    eval_genes = set(all_gene_diseases['Gene'].values)
+    logger.info(f"Number of evaluation genes: {len(eval_genes)}")
+    eval_genes = sorted(list(eval_genes))
         
     test_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/test.csv")
 
@@ -198,18 +192,15 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     entity_to_id = triples_factory.entity_to_id
 
     logger.info("Pre-computing gene phenotype vectors...")
-    gene_pheno_vectors = {}
-    for gene, phenos in tqdm(gene2pheno.items()):
-        pheno_ids = [entity_to_id[p] for p in phenos if p in entity_to_id]
-        if pheno_ids:
-            pheno_vectors = entity_embeddings[th.tensor(pheno_ids)]
-            gene_pheno_vectors[gene] = pheno_vectors
+    gene_to_pheno_vectors = {}
+    for gene in eval_genes:
+        phenos = gene2pheno[gene]
+        pheno_ids = [entity_to_id[p] for p in phenos]
+        pheno_vectors = entity_embeddings[th.tensor(pheno_ids)]
+        gene_to_pheno_vectors[gene] = pheno_vectors
 
-    # Pre-compute list of genes for consistent ordering
-    genes_list = list(gene2pheno.keys())
-    
     # Number of processes for gene parallelization
-    num_processes = 14
+    num_processes = 40
     
     results = []
     # Process each test pair (disease) serially
@@ -222,27 +213,24 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
             pheno_ids = [entity_to_id[pheno] for pheno in disease_phenos if pheno in entity_to_id]
             if not pheno_ids:
                 # No phenotypes found for this disease
-                results.append((test_gene, test_disease, -1, [0.0] * len(genes_list)))
+                results.append((test_gene, test_disease, -1, [0.0] * len(eval_genes)))
                 pbar.update()
                 continue
             
             disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
-            gene_index = genes_list.index(test_gene) if test_gene in genes_list else -1
-            
-            # Split genes into chunks for parallel processing
-            chunk_size = len(genes_list) // num_processes + 1
-            gene_chunks = [genes_list[i:i + chunk_size] for i in range(0, len(genes_list), chunk_size)]
+            gene_index = eval_genes.index(test_gene)
+
+            indexed_genes = [(i, gene) for i, gene in enumerate(eval_genes)]
             
             # Process gene chunks in parallel
             with get_context("spawn").Pool(num_processes) as pool:
-                chunk_results = pool.map(
-                    partial(process_gene_chunk, 
-                            gene_pheno_vectors=gene_pheno_vectors, 
-                            disease_phenos_vectors=disease_phenos_vectors), 
-                    gene_chunks)
-            
-            # Flatten the results
-            scores = [score for chunk in chunk_results for score in chunk]
+                disease_results = []
+                with tqdm(total=len(eval_genes), desc=f'Processing disease {test_disease}', leave=False) as pbar_gene:
+                    for output in pool.imap_unordered(partial(process_gene, gene_to_pheno_vectors, disease_phenos_vectors), indexed_genes, chunksize=20):
+                        disease_results.append(output)
+                        pbar_gene.update()
+
+            scores = sorted(disease_results, key=lambda x: x[0])
             results.append((test_gene, test_disease, gene_index, scores))
             pbar.update()
 
@@ -254,17 +242,13 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
 
             
 
-def process_gene_chunk(chunk_genes, gene_pheno_vectors, disease_phenos_vectors):
+def process_gene(gene_to_pheno_vectors, disease_phenos_vectors, indexed_gene):
     """Process a chunk of genes against a disease's phenotype vectors."""
-    chunk_scores = []
-    for gene in chunk_genes:
-        if gene in gene_pheno_vectors:
-            gene_phenos_vectors = gene_pheno_vectors[gene]
-            score = compare(gene_phenos_vectors, disease_phenos_vectors)
-        else:
-            score = 0.0  # Default score for genes with no phenotypes
-        chunk_scores.append(score)
-    return chunk_scores
+    index, gene = indexed_gene
+    
+    gene_phenos_vectors = gene_to_pheno_vectors[gene]
+    score = compare(gene_phenos_vectors, disease_phenos_vectors)
+    return index, score
         
     
 def compare(gene_phenos_vectors, disease_phenos_vectors, criterion="bma"):
