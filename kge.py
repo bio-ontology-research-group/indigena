@@ -232,7 +232,7 @@ def process_disease(disease2pheno, gene2pheno, gene_pheno_vectors, entity_embedd
     gene_index = list(gene2pheno.keys()).index(test_gene)
 
     scores = []
-    for gene in gene2pheno.keys():
+    for gene in tqdm(gene2pheno.keys(), leave=False):
         if gene in gene_pheno_vectors:
             gene_phenos_vectors = gene_pheno_vectors[gene]
             score = compare(gene_phenos_vectors, th.vstack(disease_phenos_vectors))
