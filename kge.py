@@ -249,19 +249,12 @@ def process_disease_parallel(args):
     """Process a disease against all genes in parallel."""
     test_gene, test_disease, gene_index, disease_phenos_vectors, gene_to_pheno_vectors, eval_genes = args
     
-    # Compute scores for all genes at once
+    # Since gene phenotype sizes are variable, we'll process them individually
     all_scores = []
-    # Process genes in batches to avoid memory issues
-    gene_batch_size = 500
-    gene_batches = [eval_genes[i:i+gene_batch_size] for i in range(0, len(eval_genes), gene_batch_size)]
-    
-    for gene_batch in gene_batches:
-        batch_scores = []
-        for gene in gene_batch:
-            gene_phenos_vectors = gene_to_pheno_vectors[gene]
-            score = compare(gene_phenos_vectors, disease_phenos_vectors)
-            batch_scores.append(score)
-        all_scores.extend(batch_scores)
+    for gene in eval_genes:
+        gene_phenos_vectors = gene_to_pheno_vectors[gene]
+        score = compare(gene_phenos_vectors, disease_phenos_vectors)
+        all_scores.append(score)
     
     return (test_gene, test_disease, gene_index, all_scores)
 
@@ -270,14 +263,24 @@ def compare(gene_phenos_vectors, disease_phenos_vectors, criterion="bma"):
     # Handle empty vectors
     if len(gene_phenos_vectors) == 0 or len(disease_phenos_vectors) == 0:
         return 0.0
-        
-    # Compute similarity matrix efficiently
-    sim_matrix = th.sigmoid(gene_phenos_vectors @ disease_phenos_vectors.T)
+    
+    # Pre-compute single matrix multiplication for better performance
+    # Using torch's matmul which is optimized for different tensor shapes
+    sim_matrix = th.sigmoid(th.matmul(gene_phenos_vectors, disease_phenos_vectors.T))
     
     if criterion == "bma":
         # Use torch operations for better performance
-        gene_centric_score = sim_matrix.max(dim=1)[0].mean().item()
-        disease_centric_score = sim_matrix.max(dim=0)[0].mean().item()
+        # For empty dimensions, handle gracefully
+        if sim_matrix.shape[0] == 0:
+            gene_centric_score = 0.0
+        else:
+            gene_centric_score = sim_matrix.max(dim=1)[0].mean().item()
+            
+        if sim_matrix.shape[1] == 0:
+            disease_centric_score = 0.0
+        else:
+            disease_centric_score = sim_matrix.max(dim=0)[0].mean().item()
+            
         score = (gene_centric_score + disease_centric_score) / 2
     
     return score
