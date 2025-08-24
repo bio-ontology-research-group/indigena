@@ -205,10 +205,23 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
             pheno_vectors = entity_embeddings[th.tensor(pheno_ids)]
             gene_pheno_vectors[gene] = pheno_vectors
 
+    # Pre-compute list of genes for consistent ordering
+    genes_list = list(gene2pheno.keys())
+    
+    # Use a larger chunksize for better parallelization efficiency
     with get_context("spawn").Pool(14) as pool:
         results = []
         with tqdm(total=len(test_pairs), desc='Evaluating test diseases') as pbar:
-            for output in pool.imap_unordered(partial(process_disease, disease2pheno, gene2pheno, gene_pheno_vectors, entity_embeddings, entity_to_id), test_pairs, chunksize=10):
+            for output in pool.imap_unordered(
+                partial(process_disease, 
+                        disease2pheno, 
+                        gene2pheno, 
+                        gene_pheno_vectors, 
+                        entity_embeddings, 
+                        entity_to_id,
+                        genes_list), 
+                test_pairs, 
+                chunksize=20):
                 results.append(output)
                 pbar.update()
 
@@ -220,38 +233,41 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
 
             
 
-def process_disease(disease2pheno, gene2pheno, gene_pheno_vectors, entity_embeddings, entity_to_id, test_pair):
+def process_disease(disease2pheno, gene2pheno, gene_pheno_vectors, entity_embeddings, entity_to_id, genes_list, test_pair):
     test_disease, test_gene = test_pair
     disease_phenos = disease2pheno[test_disease]
-    disease_phenos_vectors = []
-    for pheno in disease_phenos:
-        pheno_id = entity_to_id[pheno]
-        pheno_vector = entity_embeddings[pheno_id]
-        disease_phenos_vectors.append(pheno_vector)
     
-    gene_index = list(gene2pheno.keys()).index(test_gene)
+    # Get disease phenotype vectors more efficiently
+    pheno_ids = [entity_to_id[pheno] for pheno in disease_phenos if pheno in entity_to_id]
+    if not pheno_ids:
+        return (test_gene, test_disease, -1, [0.0] * len(genes_list))
+    
+    disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
+    
+    gene_index = genes_list.index(test_gene) if test_gene in genes_list else -1
 
     scores = []
-    for gene in tqdm(gene2pheno.keys(), leave=False):
+    for gene in genes_list:
         if gene in gene_pheno_vectors:
             gene_phenos_vectors = gene_pheno_vectors[gene]
-            score = compare(gene_phenos_vectors, th.vstack(disease_phenos_vectors))
+            score = compare(gene_phenos_vectors, disease_phenos_vectors)
         else:
-            score = 0.0 # Or some other default score
+            score = 0.0  # Default score for genes with no phenotypes
         scores.append(score)
-    return (list(gene2pheno.keys())[0], test_disease, gene_index, scores)
+    
+    return (test_gene, test_disease, gene_index, scores)
         
     
 def compare(gene_phenos_vectors, disease_phenos_vectors, criterion="bma"):
-    sim_matrix = gene_phenos_vectors @ disease_phenos_vectors.T
-    sim_matrix = th.sigmoid(sim_matrix).detach().cpu().numpy()
-
+    # Compute similarity matrix more efficiently
+    sim_matrix = th.sigmoid(gene_phenos_vectors @ disease_phenos_vectors.T)
+    
     if criterion == "bma":
-        gene_centric_score = sim_matrix.max(axis=1).mean()
-        disease_centric_score = sim_matrix.max(axis=0).mean()
-
+        # Use torch operations for better performance
+        gene_centric_score = sim_matrix.max(dim=1)[0].mean().item()
+        disease_centric_score = sim_matrix.max(dim=0)[0].mean().item()
         score = (gene_centric_score + disease_centric_score) / 2
-
+    
     return score
     
     
