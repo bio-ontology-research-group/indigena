@@ -192,7 +192,9 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     logger.info(f"Example test pair: {test_pairs[0]}")
 
 
-    entity_embeddings = model.entity_representations[0].weight.detach()
+        
+    entity_ids = th.tensor(list(triples_factory.entity_to_id.values()))
+    entity_embeddings = model.entity_representations[0](indices=entity_ids).cpu().detach().numpy()
     entity_to_id = triples_factory.entity_to_id
 
     logger.info("Pre-computing gene phenotype vectors...")
@@ -200,7 +202,7 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     for gene, phenos in tqdm(gene2pheno.items()):
         pheno_ids = [entity_to_id[p] for p in phenos if p in entity_to_id]
         if pheno_ids:
-            pheno_vectors = entity_embeddings[th.tensor(pheno_ids).to(entity_embeddings.device)]
+            pheno_vectors = entity_embeddings[th.tensor(pheno_ids)]
             gene_pheno_vectors[gene] = pheno_vectors
 
     with get_context("spawn").Pool(14) as pool:
