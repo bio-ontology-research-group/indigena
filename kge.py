@@ -208,22 +208,43 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     # Pre-compute list of genes for consistent ordering
     genes_list = list(gene2pheno.keys())
     
-    # Use a larger chunksize for better parallelization efficiency
-    with get_context("spawn").Pool(14) as pool:
-        results = []
-        with tqdm(total=len(test_pairs), desc='Evaluating test diseases') as pbar:
-            for output in pool.imap_unordered(
-                partial(process_disease, 
-                        disease2pheno, 
-                        gene2pheno, 
-                        gene_pheno_vectors, 
-                        entity_embeddings, 
-                        entity_to_id,
-                        genes_list), 
-                test_pairs, 
-                chunksize=20):
-                results.append(output)
+    # Number of processes for gene parallelization
+    num_processes = 14
+    
+    results = []
+    # Process each test pair (disease) serially
+    with tqdm(total=len(test_pairs), desc='Evaluating test diseases') as pbar:
+        for test_pair in test_pairs:
+            test_disease, test_gene = test_pair
+            disease_phenos = disease2pheno[test_disease]
+            
+            # Get disease phenotype vectors
+            pheno_ids = [entity_to_id[pheno] for pheno in disease_phenos if pheno in entity_to_id]
+            if not pheno_ids:
+                # No phenotypes found for this disease
+                results.append((test_gene, test_disease, -1, [0.0] * len(genes_list)))
                 pbar.update()
+                continue
+            
+            disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
+            gene_index = genes_list.index(test_gene) if test_gene in genes_list else -1
+            
+            # Split genes into chunks for parallel processing
+            chunk_size = len(genes_list) // num_processes + 1
+            gene_chunks = [genes_list[i:i + chunk_size] for i in range(0, len(genes_list), chunk_size)]
+            
+            # Process gene chunks in parallel
+            with get_context("spawn").Pool(num_processes) as pool:
+                chunk_results = pool.map(
+                    partial(process_gene_chunk, 
+                            gene_pheno_vectors=gene_pheno_vectors, 
+                            disease_phenos_vectors=disease_phenos_vectors), 
+                    gene_chunks)
+            
+            # Flatten the results
+            scores = [score for chunk in chunk_results for score in chunk]
+            results.append((test_gene, test_disease, gene_index, scores))
+            pbar.update()
 
     results_out_file = f"data/kge_results_{model_name}_fold_{fold}_results.txt"
     with open(results_out_file, "w") as f:
@@ -233,29 +254,17 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
 
             
 
-def process_disease(disease2pheno, gene2pheno, gene_pheno_vectors, entity_embeddings, entity_to_id, genes_list, test_pair):
-    test_disease, test_gene = test_pair
-    disease_phenos = disease2pheno[test_disease]
-    
-    # Get disease phenotype vectors more efficiently
-    pheno_ids = [entity_to_id[pheno] for pheno in disease_phenos if pheno in entity_to_id]
-    if not pheno_ids:
-        return (test_gene, test_disease, -1, [0.0] * len(genes_list))
-    
-    disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
-    
-    gene_index = genes_list.index(test_gene) if test_gene in genes_list else -1
-
-    scores = []
-    for gene in genes_list:
+def process_gene_chunk(chunk_genes, gene_pheno_vectors, disease_phenos_vectors):
+    """Process a chunk of genes against a disease's phenotype vectors."""
+    chunk_scores = []
+    for gene in chunk_genes:
         if gene in gene_pheno_vectors:
             gene_phenos_vectors = gene_pheno_vectors[gene]
             score = compare(gene_phenos_vectors, disease_phenos_vectors)
         else:
             score = 0.0  # Default score for genes with no phenotypes
-        scores.append(score)
-    
-    return (test_gene, test_disease, gene_index, scores)
+        chunk_scores.append(score)
+    return chunk_scores
         
     
 def compare(gene_phenos_vectors, disease_phenos_vectors, criterion="bma"):
