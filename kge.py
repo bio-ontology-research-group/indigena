@@ -201,12 +201,12 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
         pheno_ids = [entity_to_id[p] for p in phenos if p in entity_to_id]
         if pheno_ids:
             pheno_vectors = entity_representations(th.tensor(pheno_ids).to(entity_representations.device))
-            gene_pheno_vectors[gene] = pheno_vectors
+            gene_pheno_vectors[gene] = pheno_vectors.detach()
 
     with get_context("spawn").Pool(14) as pool:
         results = []
         with tqdm(total=len(test_pairs), desc='Evaluating test diseases') as pbar:
-            for output in pool.imap_unordered(partial(process_disease, disease2pheno, gene2pheno, gene_pheno_vectors, entity_representations, entity_to_id), test_pairs, chunksize=10):
+            for output in pool.imap_unordered(partial(process_disease, disease2pheno, gene2pheno, gene_pheno_vectors, entity_representations.detach(), entity_to_id), test_pairs, chunksize=10):
                 results.append(output)
                 pbar.update()
 
