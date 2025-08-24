@@ -3,22 +3,16 @@ mowl.init_jvm("10g")
 
 from mowl.projection import OWL2VecStarProjector, Edge
 from mowl.datasets import PathDataset
-from mowl.evaluation import BaseRankingEvaluator
 from mowl.utils.random import seed_everything
-from pykeen.triples import TriplesFactory
 from pykeen.models import TransE, TransD
 from pykeen.training import SLCWATrainingLoop
-
-
 import torch as th
 from torch.optim import Adam
-
 
 import os
 import click as ck
 import pandas as pd
 import time
-from functools import partial
 from tqdm import tqdm
 
 import logging
@@ -28,38 +22,33 @@ logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 
-RANDOM_SEED = 42
-seed_everything(RANDOM_SEED)
-
-def model_resolver(model_name, triples_factory, embedding_dim=100):
+def model_resolver(model_name, triples_factory, embedding_dim, random_seed):
     if model_name == "TransE":
-        model = TransE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=RANDOM_SEED) 
+        model = TransE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
     elif model_name == "TransD":
-        model = TransD(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=RANDOM_SEED)
+        model = TransD(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
     else:
         raise ValueError(f"Model {model_name} not supported.")
 
     return model
 
-         
-    
-
 
 @ck.command()
 @ck.option("--fold", type=int, default=0, help="Fold number for the dataset")
-@ck.option("--graph1", is_flag=True, help="Use graph1")
 @ck.option("--graph2", is_flag=True, help="Use graph2")
 @ck.option("--graph3", is_flag=True, help="Use graph3")
 @ck.option("--graph4", is_flag=True, help="Use graph4")
 @ck.option("--model_name", type=ck.Choice(["TransE", "TransD"]), default="TransD", help="Knowledge graph embedding model to use")
+@ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for the KGE model")
+@ck.option("--random_seed", type=int, default=0, help="Random seed for reproducibility")
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
-def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
+def main(fold, graph2, graph3, graph4, model_name, embedding_dim, random_seed, only_test):
+    seed_everything(random_seed)
+
     if graph4:
         graph3 = True
     if graph3:
         graph2 = True
-    if graph2:
-        graph1 = True
 
     edges_file = "data/upheno_owl2vecstar_edges.tsv"
 
@@ -69,7 +58,7 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
         # Project ontology using OWL2VecStarProjector
         projector = OWL2VecStarProjector(bidirectional_taxonomy=True)
         train_edges = projector.project(ds.ontology)
-        
+
         # Write edges to a file
         with open(edges_file, "w") as f:
             for edge in train_edges:
@@ -105,13 +94,15 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
             assert phenotype in entities, f"Phenotype {phenotype} not in entities"
             triples.append((disease, 'has_phenotype', phenotype))
             entities.add(disease)
-            
+
+    train_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/train.csv")
+    train_diseases = set(train_disease_genes['Disease'].values)
+        
     if graph4:
-        disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/train.csv")
-        for _, row in disease_genes.iterrows():
+        for _, row in train_disease_genes.iterrows():
             disease = row['Disease']
             gene = row['Gene']
-            extra_triples.append((gene, 'associated_with', disease))
+            triples.append((gene, 'associated_with', disease))
             assert gene in entities, f"Gene {gene} not in entities"
             assert disease in entities, f"Disease {disease} not in entities"
             
@@ -123,8 +114,15 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     mowl_triples = [Edge(src, rel, dst) for src, rel, dst in triples]
     triples_factory = Edge.as_pykeen(mowl_triples)
     
-    model = model_resolver(model_name=model_name, triples_factory=triples_factory, embedding_dim=100).to("cuda:1")
+    model = model_resolver(model_name, triples_factory, embedding_dim, random_seed).to("cuda:1")
 
+
+    graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
+    
+    model_out_filename = f"data/model_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_{graph_status}.pt"
+    results_out_file = f"data/kge_results_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_{graph_status}.txt"
+
+    
     optimizer = Adam(params=model.get_grad_params())
 
     if not only_test:
@@ -145,10 +143,10 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
         end_time = time.time()
         print(f"Training completed in {end_time - start_time:.2f} seconds.")
 
-        th.save(model.state_dict(), f"data/model_{model_name}_fold_{fold}.pt")
+        th.save(model.state_dict(), model_out_filename)
     
 
-    model.load_state_dict(th.load(f"data/model_{model_name}_fold_{fold}.pt"))
+    model.load_state_dict(th.load(model_out_filename))
     
     gene2pheno = dict()
     for _, row in gene_phenotypes.iterrows():
@@ -174,13 +172,16 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     eval_genes = sorted(list(eval_genes))
         
     test_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/test.csv")
+    test_diseases = set(test_disease_genes['Disease'].values)
 
+    assert len(test_diseases & train_diseases) == 0, "Test diseases overlap with train diseases"
+    
     test_pairs = []
     for _, row in test_disease_genes.iterrows():
         disease = row['Disease']
         gene = row['Gene']
         test_pairs.append((disease, gene))
-
+        
     logger.info(f"Number of test pairs: {len(test_pairs)}")
     logger.info(f"Example test pair: {test_pairs[0]}")
 
@@ -234,7 +235,6 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
             results.append((test_gene, test_disease, gene_to_index[test_gene], scores))
             pbar.update()
 
-    results_out_file = f"data/kge_results_{model_name}_fold_{fold}_results.txt"
     with open(results_out_file, "w") as f:
         for gene, disease, gene_index, scores in results:
             scores_str = "\t".join([str(score) for score in scores])
