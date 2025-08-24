@@ -192,7 +192,7 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     logger.info(f"Example test pair: {test_pairs[0]}")
 
 
-    entity_representations = model.entity_representations[0]
+    entity_embeddings = model.entity_representations[0].weight.detach()
     entity_to_id = triples_factory.entity_to_id
 
     logger.info("Pre-computing gene phenotype vectors...")
@@ -200,13 +200,13 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     for gene, phenos in tqdm(gene2pheno.items()):
         pheno_ids = [entity_to_id[p] for p in phenos if p in entity_to_id]
         if pheno_ids:
-            pheno_vectors = entity_representations(th.tensor(pheno_ids).to(entity_representations.device))
-            gene_pheno_vectors[gene] = pheno_vectors.detach()
+            pheno_vectors = entity_embeddings[th.tensor(pheno_ids).to(entity_embeddings.device)]
+            gene_pheno_vectors[gene] = pheno_vectors
 
     with get_context("spawn").Pool(14) as pool:
         results = []
         with tqdm(total=len(test_pairs), desc='Evaluating test diseases') as pbar:
-            for output in pool.imap_unordered(partial(process_disease, disease2pheno, gene2pheno, gene_pheno_vectors, entity_representations, entity_to_id), test_pairs, chunksize=10):
+            for output in pool.imap_unordered(partial(process_disease, disease2pheno, gene2pheno, gene_pheno_vectors, entity_embeddings, entity_to_id), test_pairs, chunksize=10):
                 results.append(output)
                 pbar.update()
 
@@ -218,13 +218,13 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
 
             
 
-def process_disease(disease2pheno, gene2pheno, gene_pheno_vectors, entity_representations, entity_to_id, test_pair):
+def process_disease(disease2pheno, gene2pheno, gene_pheno_vectors, entity_embeddings, entity_to_id, test_pair):
     test_disease, test_gene = test_pair
     disease_phenos = disease2pheno[test_disease]
     disease_phenos_vectors = []
     for pheno in disease_phenos:
         pheno_id = entity_to_id[pheno]
-        pheno_vector = entity_representations(th.tensor([pheno_id]).to(entity_representations.device))
+        pheno_vector = entity_embeddings[pheno_id]
         disease_phenos_vectors.append(pheno_vector)
     
     gene_index = list(gene2pheno.keys()).index(test_gene)
