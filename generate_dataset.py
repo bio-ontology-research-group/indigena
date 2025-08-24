@@ -115,7 +115,7 @@ def main(save_dir):
         assert diseases.startswith("OMIM:")
         
         diseases = diseases.split("|")
-        gene = "http://mowl.borg/" + str(gene)
+        gene = "http://mowl.borg/" + str(gene).replace(":", "_")
         for disease in diseases:
             assert disease.startswith("OMIM:")
             disease = "http://mowl.borg/" + disease.replace(":", "_")
@@ -140,6 +140,13 @@ def main(save_dir):
     gene_disease = [(gene, disease) for gene, disease in gene_disease if gene in gene_set and disease in disease_set]
     logger.info(f"Gene-Disease associations: {len(gene_disease)}")
 
+    logger.info(f"Saving gene-disease associations to {os.path.join(out_dir, 'gene_diseases.csv')} before splitting into folds")
+    with open(os.path.join(out_dir, 'gene_diseases.csv'), 'w') as f:
+        f.write("Gene,Disease\n")
+        for gene, disease in gene_disease:
+            f.write(f"{gene},{disease}\n")
+
+    
     logger.info("Splitting the data into training, validation and test sets")
 
     k = 10

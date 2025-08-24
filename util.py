@@ -18,7 +18,7 @@ def load_gene_phenotypes(filename, preexisting_phenotypes=None):
             continue
 
         for gene in genes.split('|'):
-            gene = "http://mowl.borg/" + str(gene)
+            gene = "http://mowl.borg/" + str(gene).replace(":", "_")
             gene_phenotypes.append((gene, phenotype))
 
     gene_phenotypes = list(set(gene_phenotypes))  # Remove duplicates

@@ -18,7 +18,6 @@ import os
 import click as ck
 import pandas as pd
 import time
-from multiprocessing import get_context
 from functools import partial
 from tqdm import tqdm
 
@@ -52,7 +51,7 @@ def model_resolver(model_name, triples_factory, embedding_dim=100):
 @ck.option("--graph2", is_flag=True, help="Use graph2")
 @ck.option("--graph3", is_flag=True, help="Use graph3")
 @ck.option("--graph4", is_flag=True, help="Use graph4")
-@ck.option("--model_name", type=ck.Choice(["TransE"]), default="TransE", help="Knowledge graph embedding model to use")
+@ck.option("--model_name", type=ck.Choice(["TransE", "TransD"]), default="TransD", help="Knowledge graph embedding model to use")
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     if graph4:
@@ -135,7 +134,7 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
             optimizer=optimizer,
         )
 
-        num_epochs = 1  # Set higher for better results
+        num_epochs = 100  # Set higher for better results
         batch_size = 1000
         start_time = time.time()
         _ = training_loop.train(
@@ -185,57 +184,55 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
     logger.info(f"Number of test pairs: {len(test_pairs)}")
     logger.info(f"Example test pair: {test_pairs[0]}")
 
-
-        
     entity_ids = th.tensor(list(triples_factory.entity_to_id.values()))
     entity_embeddings = model.entity_representations[0](indices=entity_ids).cpu().detach()
     entity_to_id = triples_factory.entity_to_id
 
+    embedding_dim = entity_embeddings.shape[1]
+    
     logger.info("Pre-computing gene phenotype vectors...")
-    gene_to_pheno_vectors = {}
+    
+    max_pheno_count = 0
+    gene_pheno_counts = []
+    
     for gene in eval_genes:
+        phenos = gene2pheno[gene]
+        count = len(phenos)
+        gene_pheno_counts.append(count)
+        if count > max_pheno_count:
+            max_pheno_count = count
+
+    logger.info(f"Maximum number of phenotypes per gene: {max_pheno_count}")
+    
+    all_genes_pheno_vectors = th.zeros(len(eval_genes), max_pheno_count, embedding_dim)
+    
+    for i, gene in enumerate(eval_genes):
         phenos = gene2pheno[gene]
         pheno_ids = [entity_to_id[p] for p in phenos]
         pheno_vectors = entity_embeddings[th.tensor(pheno_ids)]
-        gene_to_pheno_vectors[gene] = pheno_vectors
+        all_genes_pheno_vectors[i, :len(pheno_ids), :] = pheno_vectors
 
-    # Number of processes for disease parallelization
-    num_processes = 40
-    
+    gene_pheno_counts = th.tensor(gene_pheno_counts, dtype=th.float32)
+                
     # Create gene indices mapping for faster lookup
     gene_to_index = {gene: i for i, gene in enumerate(eval_genes)}
-    
-    # Process test pairs in batches for better parallelization
-    batch_size = 10  # Process multiple diseases in each batch
-    test_pair_batches = [test_pairs[i:i+batch_size] for i in range(0, len(test_pairs), batch_size)]
+    logger.info(f"Example gene to index mapping: {list(gene_to_index.items())[:5]}")
     
     results = []
-    with tqdm(total=len(test_pairs), desc='Evaluating test pairs') as pbar:
-        for batch in test_pair_batches:
-            batch_args = []
-            for test_pair in batch:
-                test_disease, test_gene = test_pair
-                disease_phenos = disease2pheno[test_disease]
-                
-                # Get disease phenotype vectors
-                pheno_ids = [entity_to_id[pheno] for pheno in disease_phenos if pheno in entity_to_id]
-                if not pheno_ids:
-                    # No phenotypes found for this disease
-                    results.append((test_gene, test_disease, -1, [0.0] * len(eval_genes)))
-                    pbar.update()
-                    continue
-                
-                disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
-                gene_index = gene_to_index[test_gene]
-                
-                batch_args.append((test_gene, test_disease, gene_index, disease_phenos_vectors, gene_to_pheno_vectors, eval_genes))
+    
+    with tqdm(total=len(test_pairs), desc='Evaluating test diseases') as pbar:
+        for test_disease, test_gene in test_pairs:
             
-            # Process diseases in parallel
-            if batch_args:
-                with get_context("spawn").Pool(min(num_processes, len(batch_args))) as pool:
-                    batch_results = pool.map(process_disease_parallel, batch_args)
-                    results.extend(batch_results)
-                    pbar.update(len(batch_args))
+            disease_phenos = disease2pheno[test_disease]
+            pheno_ids = [entity_to_id[p] for p in disease_phenos]
+
+            disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
+            scores = compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts)
+            assert scores.shape == (len(eval_genes),), f"Scores shape {scores.shape} does not match number of genes {len(eval_genes)}"
+            scores = scores.tolist()
+            
+            results.append((test_gene, test_disease, gene_to_index[test_gene], scores))
+            pbar.update()
 
     results_out_file = f"data/kge_results_{model_name}_fold_{fold}_results.txt"
     with open(results_out_file, "w") as f:
@@ -243,48 +240,62 @@ def main(fold, graph1, graph2, graph3, graph4, model_name, only_test):
             scores_str = "\t".join([str(score) for score in scores])
             f.write(f"{gene}\t{disease}\t{gene_index}\t{scores_str}\n")
 
+
+def compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts, criterion="bma"):
+    """
+    Compute similarity between a disease and all genes in a vectorized manner.
+
+    :param all_genes_pheno_vectors: Padded tensor of shape (num_genes, max_phenos, emb_dim)
+    :param disease_phenos_vectors: Tensor of shape (num_disease_phenos, emb_dim)
+    :param gene_pheno_counts: Tensor of shape (num_genes, 1) with counts of real phenotypes for each gene.
+    :param criterion: Similarity criterion.
+    """
             
+    num_genes, max_phenos, emb_dim = all_genes_pheno_vectors.shape
+    num_disease_phenos = disease_phenos_vectors.shape[0]
 
-def process_disease_parallel(args):
-    """Process a disease against all genes in parallel."""
-    test_gene, test_disease, gene_index, disease_phenos_vectors, gene_to_pheno_vectors, eval_genes = args
-    
-    # Since gene phenotype sizes are variable, we'll process them individually
-    all_scores = []
-    for gene in eval_genes:
-        gene_phenos_vectors = gene_to_pheno_vectors[gene]
-        score = compare(gene_phenos_vectors, disease_phenos_vectors)
-        all_scores.append(score)
-    
-    return (test_gene, test_disease, gene_index, all_scores)
+    # Reshape for matrix multiplication: (num_genes * max_phenos, a) x (a,b)
+    sim_matrix = th.matmul(
+        all_genes_pheno_vectors.view(-1, emb_dim),
+        disease_phenos_vectors.T
+    )
 
-def compare(gene_phenos_vectors, disease_phenos_vectors, criterion="bma"):
-    """Compute similarity between gene and disease phenotype vectors."""
-    # Handle empty vectors
-    if len(gene_phenos_vectors) == 0 or len(disease_phenos_vectors) == 0:
-        return 0.0
+    # before sigmoid make 0s very negative
+    sim_matrix[sim_matrix == 0] = -th.inf
     
-    # Pre-compute single matrix multiplication for better performance
-    # Using torch's matmul which is optimized for different tensor shapes
-    sim_matrix = th.sigmoid(th.matmul(gene_phenos_vectors, disease_phenos_vectors.T))
+    sim_matrix = th.sigmoid(sim_matrix) # Resulting shape: (num_genes*max_phenos, num_disease_phenos)
+
+    sim_matrix = sim_matrix.view(num_genes, max_phenos, num_disease_phenos)
     
     if criterion == "bma":
-        # Use torch operations for better performance
-        # For empty dimensions, handle gracefully
-        if sim_matrix.shape[0] == 0:
-            gene_centric_score = 0.0
-        else:
-            gene_centric_score = sim_matrix.max(dim=1)[0].mean().item()
-            
-        if sim_matrix.shape[1] == 0:
-            disease_centric_score = 0.0
-        else:
-            disease_centric_score = sim_matrix.max(dim=0)[0].mean().item()
-            
-        score = (gene_centric_score + disease_centric_score) / 2
-    
-    return score
-    
+        # Gene-centric scores
+        logger.debug(f"Sim matrix shape: {sim_matrix.shape}")
+        gene_max_sim, _ = sim_matrix.max(dim=-1)
+        logger.debug(f"Gene max sim shape: {gene_max_sim.shape}")
+        gene_centric_sum = gene_max_sim.sum(dim=-1)
+        logger.debug(f"Gene centric sum shape: {gene_centric_sum.shape}")
+        # For genes with 0 phenotypes, gene_pheno_counts is 0, this will result in NaN. Avoid division by zero.
+        # We replace 0 counts with 1 to avoid division by zero. The sum is 0 so the score will be 0.
+        gene_pheno_counts_safe = th.max(gene_pheno_counts, th.tensor(1.0))
+        logger.debug(f"Gene pheno counts shape: {gene_pheno_counts_safe.shape}")
+        gene_centric_scores = gene_centric_sum / gene_pheno_counts_safe
+        logger.debug(f"Gene centric scores shape: {gene_centric_scores.shape}")
+
+        assert th.all(gene_centric_scores >= 0) and th.all(gene_centric_scores <= 1), "Gene centric scores out of range [0, 1]"
+        
+        # Disease-centric scores
+        disease_max_sim, _ = sim_matrix.max(dim=1)
+        disease_centric_scores = disease_max_sim.mean(dim=-1)
+        # disease_centric_scores = disease_centric_sum / num_disease_phenos
+
+        assert th.all(disease_centric_scores >= 0) and th.all(disease_centric_scores <= 1), "Disease centric scores out of range [0, 1]"
+        assert gene_centric_scores.shape == disease_centric_scores.shape == (num_genes,), f"Scores shape mismatch: {gene_centric_scores.shape}, {disease_centric_scores.shape}, expected {(num_genes,)}"
+        
+        scores = (gene_centric_scores + disease_centric_scores) / 2
+        return scores
+    else:
+        raise NotImplementedError(f"Criterion {criterion} not implemented.")
+
     
 if __name__ == "__main__":
     main()
