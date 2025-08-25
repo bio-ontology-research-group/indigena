@@ -14,13 +14,13 @@ import click as ck
 import pandas as pd
 import time
 from tqdm import tqdm
+import wandb
 
 import logging
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
-
 
 def model_resolver(model_name, triples_factory, embedding_dim, random_seed):
     if model_name == "TransE":
@@ -40,11 +40,33 @@ def model_resolver(model_name, triples_factory, embedding_dim, random_seed):
 @ck.option("--graph4", is_flag=True, help="Use graph4")
 @ck.option("--model_name", type=ck.Choice(["TransE", "TransD"]), default="TransD", help="Knowledge graph embedding model to use")
 @ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for the KGE model")
+@ck.option("--batch_size", type=int, default=32, help="Batch size for training")
+@ck.option("--learning_rate", type=float, default=0.001, help="Learning rate for the optimizer")
+@ck.option("--num_epochs", type=int, default=100, help="Number of training epochs")
 @ck.option("--random_seed", type=int, default=0, help="Random seed for reproducibility")
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
-def main(fold, graph2, graph3, graph4, model_name, embedding_dim, random_seed, only_test):
-    seed_everything(random_seed)
+@ck.option("--description", type=str, default="", help="Description for the wandb run")
+@ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
+def main(fold, graph2, graph3, graph4, model_name, embedding_dim,
+         batch_size, learning_rate, num_epochs, random_seed,
+         only_test, description):):
 
+    wandb.init(entity="ferzcam", project="indiga", name=description)                
+    if no_sweep:
+        wandb.log({"embedding_dim": embedding_dim,
+                   "batch_size": batch_size,
+                   "learning_rate": learning_rate,
+                   "num_epochs": num_epochs,
+                   })
+    else:
+        embedding_dim = wandb.config.embedding_dim
+        batch_size = wandb.config.batch_size
+        learning_rate = wandb.config.learning_rate
+        num_epochs = wandb.config.num_epochs
+
+    
+    seed_everything(random_seed)
+    
     if graph4:
         graph3 = True
     if graph3:
@@ -119,21 +141,21 @@ def main(fold, graph2, graph3, graph4, model_name, embedding_dim, random_seed, o
 
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
     
-    model_out_filename = f"data/model_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_{graph_status}.pt"
-    results_out_file = f"data/kge_results_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_{graph_status}.txt"
+    model_out_filename = f"data/models/model_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.pt"
+    results_out_file = f"data/results/kge_results_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.tsv"
 
     
-    optimizer = Adam(params=model.get_grad_params())
+    optimizer = Adam(params=model.get_grad_params(), lr=learning_rate)
 
     if not only_test:
         training_loop = SLCWATrainingLoop(
             model=model,
             triples_factory=triples_factory,
             optimizer=optimizer,
+            
         )
-
-        num_epochs = 100  # Set higher for better results
-        batch_size = 1000
+ # Set higher for better results
+        batch_size = batch_size
         start_time = time.time()
         _ = training_loop.train(
             triples_factory=triples_factory,
