@@ -16,6 +16,8 @@ import time
 from tqdm import tqdm
 import wandb
 
+from evaluate_sem_sim import compute_metrics, print_as_tex
+
 import logging
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -40,7 +42,7 @@ def model_resolver(model_name, triples_factory, embedding_dim, random_seed):
 @ck.option("--graph4", is_flag=True, help="Use graph4")
 @ck.option("--model_name", type=ck.Choice(["TransE", "TransD"]), default="TransD", help="Knowledge graph embedding model to use")
 @ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for the KGE model")
-@ck.option("--batch_size", type=int, default=32, help="Batch size for training")
+@ck.option("--batch_size", type=int, default=128, help="Batch size for training")
 @ck.option("--learning_rate", type=float, default=0.001, help="Learning rate for the optimizer")
 @ck.option("--num_epochs", type=int, default=100, help="Number of training epochs")
 @ck.option("--random_seed", type=int, default=0, help="Random seed for reproducibility")
@@ -263,6 +265,16 @@ def main(fold, graph2, graph3, graph4, model_name, embedding_dim,
             f.write(f"{gene}\t{disease}\t{gene_index}\t{scores_str}\n")
 
 
+    micro_metrics, macro_metrics = compute_metrics(results_out_file)
+    metrics = ['mr', 'mrr', 'auc', 'hits@1', 'hits@3', 'hits@10', 'hits@100']
+
+    macro_to_log = {f"mac_{k}": v for k, v in macro_metrics.items() if k in metrics}
+    micro_to_log = {f"mic_{k}": v for k, v in micro_metrics.items() if k in metrics}
+
+    wandb.log({**macro_to_log, **micro_to_log})
+    print_as_tex(micro_metrics, macro_metrics)
+
+    
 def compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts, criterion="bma"):
     """
     Compute similarity between a disease and all genes in a vectorized manner.
