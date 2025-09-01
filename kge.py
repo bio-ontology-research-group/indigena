@@ -49,7 +49,7 @@ def model_resolver(model_name, triples_factory, embedding_dim, random_seed):
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
 def main(fold, graph2, graph3, graph4, model_name, embedding_dim,
          batch_size, learning_rate, num_epochs, random_seed,
-         only_test, description):):
+         only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indiga", name=description)                
     if no_sweep:
@@ -136,7 +136,7 @@ def main(fold, graph2, graph3, graph4, model_name, embedding_dim,
     mowl_triples = [Edge(src, rel, dst) for src, rel, dst in triples]
     triples_factory = Edge.as_pykeen(mowl_triples)
     
-    model = model_resolver(model_name, triples_factory, embedding_dim, random_seed).to("cuda:1")
+    model = model_resolver(model_name, triples_factory, embedding_dim, random_seed).to("cuda")
 
 
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
