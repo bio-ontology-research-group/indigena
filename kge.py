@@ -1,7 +1,7 @@
 import mowl
 mowl.init_jvm("10g")
 
-from mowl.projection import OWL2VecStarProjector, Edge, CategoricalProjector
+from mowl.projection import OWL2VecStarProjector, Edge
 from mowl.datasets import PathDataset
 from mowl.utils.random import seed_everything
 from pykeen.models import TransE, TransD
@@ -55,10 +55,6 @@ def projector_resolver(projector_name):
     if projector_name.lower() == "owl2vecstar":
         edges_file = "data/upheno_owl2vecstar_edges.tsv"
         projector = OWL2VecStarProjector(bidirectional_taxonomy=True)
-    elif projector_name.lower () == "categorical":
-        edges_file = "data/upheno_categorical_edges.tsv"
-        projector = CategoricalProjector("str")
-        
     else:
         raise ValueError(f"Projector {projector_name} not supported.")
 
@@ -69,7 +65,7 @@ def projector_resolver(projector_name):
 @ck.option("--graph2", is_flag=True, help="Use graph2")
 @ck.option("--graph3", is_flag=True, help="Use graph3")
 @ck.option("--graph4", is_flag=True, help="Use graph4")
-@ck.option("--projector_name", type=ck.Choice(["owl2vecstar", "categorical"]), default="owl2vecstar", help="Projector to use for ontology projection")
+@ck.option("--projector_name", type=ck.Choice(["owl2vecstar"]), default="owl2vecstar", help="Projector to use for ontology projection")
 @ck.option("--model_name", type=ck.Choice(["transe", "transd", "ordere"]), default="transd", help="Knowledge graph embedding model to use")
 @ck.option("--mode", type=ck.Choice(["inductive", "transductive"]), default="inductive", help="Inductive or transductive setting")
 @ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for the KGE model")
@@ -91,6 +87,7 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
                    "learning_rate": learning_rate,
                    "num_epochs": num_epochs,
                    "fold": fold,
+                   "mode": mode
                    })
     else:
         embedding_dim = wandb.config.embedding_dim
@@ -98,7 +95,7 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
         learning_rate = wandb.config.learning_rate
         num_epochs = wandb.config.num_epochs
         fold = wandb.config.fold
-
+        mode = wandb.config.mode
     
     seed_everything(random_seed)
     
@@ -107,7 +104,14 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
     if graph3:
         graph2 = True
 
-    
+
+    train_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/train.csv")
+    train_diseases = set(train_disease_genes['Disease'].values)
+
+    test_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/test.csv")
+    test_diseases = set(test_disease_genes['Disease'].values)
+
+        
     edges_file, projector = projector_resolver(projector_name)
 
     if not os.path.exists(edges_file):
@@ -136,25 +140,36 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
     disease_phenotypes = pd.read_csv("data/disease_phenotypes.csv")
     
     if graph2:
-        
         for _, row in gene_phenotypes.iterrows():
             gene = row['Gene']
             phenotype = row['Phenotype']
             assert phenotype in entities, f"Phenotype {phenotype} not in entities"
             triples.append((gene, 'has_phenotype', phenotype))
             entities.add(gene)
-            
+
+    
     if graph3:
         for _, row in disease_phenotypes.iterrows():
             disease = row['Disease']
             phenotype = row['Phenotype']
             assert phenotype in entities, f"Phenotype {phenotype} not in entities"
+            if mode == "inductive":
+                if disease in test_diseases:
+                    continue
             triples.append((disease, 'has_phenotype', phenotype))
             entities.add(disease)
 
-    train_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/train.csv")
-    train_diseases = set(train_disease_genes['Disease'].values)
-        
+
+    assert len(test_diseases & train_diseases) == 0, "Test diseases overlap with train diseases"
+
+    if mode == "inductive":
+        assert len(test_diseases & entities) == 0, "Test diseases overlap with graph diseases"
+    elif mode == "transductive":
+        assert len(test_diseases & entities) == len(test_diseases), "Some test diseases not in train diseases"
+    else:
+        raise ValueError(f"Mode {mode} not supported.")
+
+    
     if graph4:
         for _, row in train_disease_genes.iterrows():
             disease = row['Disease']
@@ -176,8 +191,8 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
 
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
     
-    model_out_filename = f"data/models/projector_{projector_name}_model_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.pt"
-    results_out_file = f"data/results/kge_results_{projector_name}_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.tsv"
+    model_out_filename = f"data/models/projector_{projector_name}_model_{model_name}_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.pt"
+    results_out_file = f"data/results/kge_results_{projector_name}_{model_name}_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.tsv"
 
     
     optimizer = Adam(params=model.get_grad_params(), lr=learning_rate)
@@ -228,10 +243,6 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
     logger.info(f"Number of evaluation genes: {len(eval_genes)}")
     eval_genes = sorted(list(eval_genes))
         
-    test_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/test.csv")
-    test_diseases = set(test_disease_genes['Disease'].values)
-
-    assert len(test_diseases & train_diseases) == 0, "Test diseases overlap with train diseases"
     
     test_pairs = []
     for _, row in test_disease_genes.iterrows():
