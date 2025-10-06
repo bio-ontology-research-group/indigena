@@ -71,6 +71,7 @@ def projector_resolver(projector_name):
 @ck.option("--graph4", is_flag=True, help="Use graph4")
 @ck.option("--projector_name", type=ck.Choice(["owl2vecstar", "categorical"]), default="owl2vecstar", help="Projector to use for ontology projection")
 @ck.option("--model_name", type=ck.Choice(["transe", "transd", "ordere"]), default="transd", help="Knowledge graph embedding model to use")
+@ck.option("--mode", type=ck.Choice(["inductive", "transductive"]), default="inductive", help="Inductive or transductive setting")
 @ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for the KGE model")
 @ck.option("--batch_size", type=int, default=128, help="Batch size for training")
 @ck.option("--learning_rate", type=float, default=0.001, help="Learning rate for the optimizer")
@@ -80,7 +81,7 @@ def projector_resolver(projector_name):
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
 def main(fold, graph2, graph3, graph4, projector_name, model_name,
-         embedding_dim, batch_size, learning_rate, num_epochs,
+         mode, embedding_dim, batch_size, learning_rate, num_epochs,
          random_seed, only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indiga", name=description)                
