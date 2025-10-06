@@ -90,12 +90,14 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
                    "batch_size": batch_size,
                    "learning_rate": learning_rate,
                    "num_epochs": num_epochs,
+                   "fold": fold,
                    })
     else:
         embedding_dim = wandb.config.embedding_dim
         batch_size = wandb.config.batch_size
         learning_rate = wandb.config.learning_rate
         num_epochs = wandb.config.num_epochs
+        fold = wandb.config.fold
 
     
     seed_everything(random_seed)
