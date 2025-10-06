@@ -76,6 +76,8 @@ String icMeasure = options.ic
 String pairwiseMeasure = options.pw
 String groupwiseMeasure = options.gw
 
+println("Using parameters: icMeasure=${icMeasure}, pairwiseMeasure=${pairwiseMeasure}, groupwiseMeasure=${groupwiseMeasure}, rootDir=${rootDir}, fold=${options.fold}")
+
 def manager = OWLManager.createOWLOntologyManager()
 def ontology = manager.loadOntologyFromOntologyDocument(new File(rootDir + "/upheno.owl"))
 
@@ -321,6 +323,8 @@ static pairwiseMeasureResolver(measure) {
 static groupwiseMeasureResolver(measure) {
     if (measure.toLowerCase() == "bma") {
         return SMConstants.FLAG_SIM_GROUPWISE_BMA
+    } else if (measure.toLowerCase() == "bmm") {
+	return SMConstants.FLAG_SIM_GROUPWISE_BMM
     } else {
         throw new IllegalArgumentException("Invalid groupwise measure: $measure")
     }

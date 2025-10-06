@@ -20,9 +20,6 @@ def compute_rank_roc(ranks, num_entities):
     auc = np.trapz(auc_y, auc_x) / n_tails
     return auc
 
-
-filename = sys.argv[1]
-
 def print_as_tex(micro_metrics, macro_metrics):
     header = "MR & MRR & Hits@1 & Hits@3 & Hits@10 & Hits@100 & AUC"
     print(header)

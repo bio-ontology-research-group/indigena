@@ -1,7 +1,7 @@
 import mowl
 mowl.init_jvm("10g")
 
-from mowl.projection import OWL2VecStarProjector, Edge
+from mowl.projection import OWL2VecStarProjector, Edge, CategoricalProjector
 from mowl.datasets import PathDataset
 from mowl.utils.random import seed_everything
 from pykeen.models import TransE, TransD
@@ -24,23 +24,53 @@ handler = logging.StreamHandler()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
+
+class OrderE(TransE):
+    def __init__(self, *args, **kwargs):
+        super(OrderE, self).__init__(*args, **kwargs)
+
+    def forward(self, h_indices, r_indices, t_indices, mode = None):
+        h, _, t = self._get_representations(h=h_indices, r=r_indices, t=t_indices, mode=mode)
+        order_loss = th.linalg.norm(th.relu(t-h), dim=1)
+        return -order_loss
+
+    def score_hrt(self, hrt_batch, mode = None):
+        h, r, t = self._get_representations(h=hrt_batch[:, 0], r = hrt_batch[:, 1], t=hrt_batch[:, 2], mode=mode)
+        return -th.linalg.norm(th.relu(t-h), dim=1)
+
+
 def model_resolver(model_name, triples_factory, embedding_dim, random_seed):
-    if model_name == "TransE":
+    if model_name.lower() == "transe":
         model = TransE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
-    elif model_name == "TransD":
+    elif model_name.lower() == "transd":
         model = TransD(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
+    elif model_name.lower() == "ordere":
+        model = OrderE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
     else:
         raise ValueError(f"Model {model_name} not supported.")
 
     return model
 
+def projector_resolver(projector_name):
+    if projector_name.lower() == "owl2vecstar":
+        edges_file = "data/upheno_owl2vecstar_edges.tsv"
+        projector = OWL2VecStarProjector(bidirectional_taxonomy=True)
+    elif projector_name.lower () == "categorical":
+        edges_file = "data/upheno_categorical_edges.tsv"
+        projector = CategoricalProjector("str")
+        
+    else:
+        raise ValueError(f"Projector {projector_name} not supported.")
+
+    return edges_file, projector
 
 @ck.command()
 @ck.option("--fold", type=int, default=0, help="Fold number for the dataset")
 @ck.option("--graph2", is_flag=True, help="Use graph2")
 @ck.option("--graph3", is_flag=True, help="Use graph3")
 @ck.option("--graph4", is_flag=True, help="Use graph4")
-@ck.option("--model_name", type=ck.Choice(["TransE", "TransD"]), default="TransD", help="Knowledge graph embedding model to use")
+@ck.option("--projector_name", type=ck.Choice(["owl2vecstar", "categorical"]), default="owl2vecstar", help="Projector to use for ontology projection")
+@ck.option("--model_name", type=ck.Choice(["transe", "transd", "ordere"]), default="transd", help="Knowledge graph embedding model to use")
 @ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for the KGE model")
 @ck.option("--batch_size", type=int, default=128, help="Batch size for training")
 @ck.option("--learning_rate", type=float, default=0.001, help="Learning rate for the optimizer")
@@ -49,9 +79,9 @@ def model_resolver(model_name, triples_factory, embedding_dim, random_seed):
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
-def main(fold, graph2, graph3, graph4, model_name, embedding_dim,
-         batch_size, learning_rate, num_epochs, random_seed,
-         only_test, description, no_sweep):
+def main(fold, graph2, graph3, graph4, projector_name, model_name,
+         embedding_dim, batch_size, learning_rate, num_epochs,
+         random_seed, only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indiga", name=description)                
     if no_sweep:
@@ -76,13 +106,13 @@ def main(fold, graph2, graph3, graph4, model_name, embedding_dim,
     if graph3:
         graph2 = True
 
-    edges_file = "data/upheno_owl2vecstar_edges.tsv"
+    
+    edges_file, projector = projector_resolver(projector_name)
 
     if not os.path.exists(edges_file):
         ds = PathDataset("data/upheno.owl")
 
         # Project ontology using OWL2VecStarProjector
-        projector = OWL2VecStarProjector(bidirectional_taxonomy=True)
         train_edges = projector.project(ds.ontology)
 
         # Write edges to a file
@@ -145,8 +175,8 @@ def main(fold, graph2, graph3, graph4, model_name, embedding_dim,
 
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
     
-    model_out_filename = f"data/models/model_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.pt"
-    results_out_file = f"data/results/kge_results_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.tsv"
+    model_out_filename = f"data/models/projector_{projector_name}_model_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.pt"
+    results_out_file = f"data/results/kge_results_{projector_name}_{model_name}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.tsv"
 
     
     optimizer = Adam(params=model.get_grad_params(), lr=learning_rate)
@@ -158,7 +188,7 @@ def main(fold, graph2, graph3, graph4, model_name, embedding_dim,
             optimizer=optimizer,
             
         )
- # Set higher for better results
+ 
         batch_size = batch_size
         start_time = time.time()
         _ = training_loop.train(
