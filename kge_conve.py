@@ -79,7 +79,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
          embedding_height, kernel_height, kernel_width, dropout_0, dropout_1, 
          dropout_2, random_seed, only_test, description, no_sweep):
 
-    wandb.init(entity="ferzcam", project="indiga", name=description)                
+    wandb.init(entity="ferzcam", project="indigena", name=description)                
     if no_sweep:
         wandb.log({"embedding_dim": embedding_dim,
                    "batch_size": batch_size,

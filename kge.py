@@ -4,7 +4,7 @@ mowl.init_jvm("10g")
 from mowl.projection import OWL2VecStarProjector, Edge
 from mowl.datasets import PathDataset
 from mowl.utils.random import seed_everything
-from pykeen.models import TransE, TransD
+from pykeen.models import TransE, TransD, ConvE, PairRE, DistMult
 from pykeen.training import SLCWATrainingLoop
 import torch as th
 from torch.optim import Adam
@@ -24,28 +24,17 @@ handler = logging.StreamHandler()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
-
-class OrderE(TransE):
-    def __init__(self, *args, **kwargs):
-        super(OrderE, self).__init__(*args, **kwargs)
-
-    def forward(self, h_indices, r_indices, t_indices, mode = None):
-        h, _, t = self._get_representations(h=h_indices, r=r_indices, t=t_indices, mode=mode)
-        order_loss = th.linalg.norm(th.relu(t-h), dim=1)
-        return -order_loss
-
-    def score_hrt(self, hrt_batch, mode = None):
-        h, r, t = self._get_representations(h=hrt_batch[:, 0], r = hrt_batch[:, 1], t=hrt_batch[:, 2], mode=mode)
-        return -th.linalg.norm(th.relu(t-h), dim=1)
-
-
 def model_resolver(model_name, triples_factory, embedding_dim, random_seed):
     if model_name.lower() == "transe":
         model = TransE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
     elif model_name.lower() == "transd":
         model = TransD(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
-    elif model_name.lower() == "ordere":
-        model = OrderE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
+    elif model_name.lower() == "distmult":
+        model = DistMult(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
+    elif model_name.lower() == "conve":
+        model = ConvE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
+    elif model_name.lower() == "paire":
+        model = PairRE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
     else:
         raise ValueError(f"Model {model_name} not supported.")
 
@@ -66,7 +55,7 @@ def projector_resolver(projector_name):
 @ck.option("--graph3", is_flag=True, help="Use graph3")
 @ck.option("--graph4", is_flag=True, help="Use graph4")
 @ck.option("--projector_name", type=ck.Choice(["owl2vecstar"]), default="owl2vecstar", help="Projector to use for ontology projection")
-@ck.option("--model_name", type=ck.Choice(["transe", "transd", "ordere"]), default="transd", help="Knowledge graph embedding model to use")
+@ck.option("--model_name", default="transd", help="Knowledge graph embedding model to use")
 @ck.option("--mode", type=ck.Choice(["inductive", "transductive"]), default="inductive", help="Inductive or transductive setting")
 @ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for the KGE model")
 @ck.option("--batch_size", type=int, default=128, help="Batch size for training")
@@ -80,7 +69,7 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
          mode, embedding_dim, batch_size, learning_rate, num_epochs,
          random_seed, only_test, description, no_sweep):
 
-    wandb.init(entity="ferzcam", project="indiga", name=description)                
+    wandb.init(entity="ferzcam", project="indigena", name=description)                
     if no_sweep:
         wandb.log({"embedding_dim": embedding_dim,
                    "batch_size": batch_size,
@@ -147,7 +136,6 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
             triples.append((gene, 'has_phenotype', phenotype))
             entities.add(gene)
 
-    
     if graph3:
         for _, row in disease_phenotypes.iterrows():
             disease = row['Disease']
@@ -156,7 +144,7 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
             if mode == "inductive":
                 if disease in test_diseases:
                     continue
-            triples.append((disease, 'has_phenotype', phenotype))
+            triples.append((disease, 'has_symptom', phenotype))
             entities.add(disease)
 
 
@@ -165,7 +153,7 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
     if mode == "inductive":
         assert len(test_diseases & entities) == 0, "Test diseases overlap with graph diseases"
     elif mode == "transductive":
-        assert len(test_diseases & entities) == len(test_diseases), "Some test diseases not in train diseases"
+        assert len(test_diseases & entities) == len(test_diseases), f"Some test diseases not in train diseases. Num entities: {len(entities)}, Num test diseases in entities: {len(test_diseases & entities)}, Total test diseases: {len(test_diseases)}"
     else:
         raise ValueError(f"Mode {mode} not supported.")
 
@@ -192,7 +180,8 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
     
     model_out_filename = f"data/models/projector_{projector_name}_model_{model_name}_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.pt"
-    results_out_file = f"data/results/kge_results_{projector_name}_{model_name}_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.tsv"
+    inductive_results_out_file = f"data/results/kge_results_{projector_name}_{model_name}_inductive_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.tsv"
+    transductive_results_out_file = f"data/results/kge_results_{projector_name}_{model_name}_transductive_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_{graph_status}.tsv"
 
     
     optimizer = Adam(params=model.get_grad_params(), lr=learning_rate)
@@ -257,6 +246,8 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
     entity_embeddings = model.entity_representations[0](indices=entity_ids).cpu().detach()
     entity_to_id = triples_factory.entity_to_id
 
+    relation_to_id = triples_factory.relation_to_id
+
     embedding_dim = entity_embeddings.shape[1]
     
     logger.info("Pre-computing gene phenotype vectors...")
@@ -287,7 +278,8 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
     gene_to_index = {gene: i for i, gene in enumerate(eval_genes)}
     logger.info(f"Example gene to index mapping: {list(gene_to_index.items())[:5]}")
     
-    results = []
+    inductive_results = []
+    transductive_results = []
     
     with tqdm(total=len(test_pairs), desc='Evaluating test diseases') as pbar:
         for test_disease, test_gene in test_pairs:
@@ -296,28 +288,58 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
             pheno_ids = [entity_to_id[p] for p in disease_phenos]
 
             disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
-            scores = compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts)
-            assert scores.shape == (len(eval_genes),), f"Scores shape {scores.shape} does not match number of genes {len(eval_genes)}"
-            scores = scores.tolist()
+            inductive_scores = compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts)
+            assert inductive_scores.shape == (len(eval_genes),), f"Scores shape {inductive_scores.shape} does not match number of genes {len(eval_genes)}"
+            inductive_scores = inductive_scores.tolist()
             
-            results.append((test_gene, test_disease, gene_to_index[test_gene], scores))
+            inductive_results.append((test_gene, test_disease, gene_to_index[test_gene], inductive_scores))
+
+            if mode == "transductive":
+                gene_ids = th.tensor([entity_to_id[gene] for gene in eval_genes])
+                disease_id = th.tensor([entity_to_id[test_disease]]).repeat(len(eval_genes))
+                relation_id = th.tensor([relation_to_id['associated_with']]).repeat(len(eval_genes))
+                triple_tensor = th.stack([gene_ids, relation_id, disease_id], dim=1).to("cuda")
+                assert triple_tensor.shape == (len(eval_genes), 3), f"Triple tensor shape {triple_tensor.shape} does not match expected {(len(eval_genes), 3)}"
+                with th.no_grad():
+                    transductive_scores = model.score_hrt(triple_tensor).cpu().detach().squeeze().tolist()
+                    assert len(transductive_scores) == len(eval_genes), f"Transductive scores length {len(transductive_scores)} does not match number of genes {len(eval_genes)}"
+                    transductive_results.append((test_gene, test_disease, gene_to_index[test_gene], transductive_scores))
+                
             pbar.update()
 
-    with open(results_out_file, "w") as f:
-        for gene, disease, gene_index, scores in results:
+    with open(inductive_results_out_file, "w") as f:
+        for gene, disease, gene_index, scores in inductive_results:
             scores_str = "\t".join([str(score) for score in scores])
             f.write(f"{gene}\t{disease}\t{gene_index}\t{scores_str}\n")
 
-
-    micro_metrics, macro_metrics = compute_metrics(results_out_file)
+    inductive_micro_metrics, inductive_macro_metrics = compute_metrics(inductive_results_out_file)
     metrics = ['mr', 'mrr', 'auc', 'hits@1', 'hits@3', 'hits@10', 'hits@100']
 
-    macro_to_log = {f"mac_{k}": v for k, v in macro_metrics.items() if k in metrics}
-    micro_to_log = {f"mic_{k}": v for k, v in micro_metrics.items() if k in metrics}
+    macro_to_log = {f"imac_{k}": v for k, v in inductive_macro_metrics.items() if k in metrics}
+    micro_to_log = {f"imic_{k}": v for k, v in inductive_micro_metrics.items() if k in metrics}
 
     wandb.log({**macro_to_log, **micro_to_log})
-    print_as_tex(micro_metrics, macro_metrics)
+    print(f"Inductive results saved to {inductive_results_out_file}")
+    print_as_tex(inductive_micro_metrics, inductive_macro_metrics)
 
+
+            
+    if mode == "transductive":
+        with open(transductive_results_out_file, "w") as f:
+            for gene, disease, gene_index, scores in transductive_results:
+                scores_str = "\t".join([str(score) for score in scores])
+                f.write(f"{gene}\t{disease}\t{gene_index}\t{scores_str}\n")
+
+        transductive_micro_metrics, transductive_macro_metrics = compute_metrics(transductive_results_out_file)
+        macro_to_log = {f"tmac_{k}": v for k, v in transductive_macro_metrics.items() if k in metrics}
+        micro_to_log = {f"tmic_{k}": v for k, v in transductive_micro_metrics.items() if k in metrics}
+        wandb.log({**macro_to_log, **micro_to_log})
+        print(f"Transductive results saved to {transductive_results_out_file}")
+        print_as_tex(transductive_micro_metrics, transductive_macro_metrics)
+
+            
+            
+    
     
 def compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts, criterion="bma"):
     """
