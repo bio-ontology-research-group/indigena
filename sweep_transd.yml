@@ -12,9 +12,7 @@ name: hpo_transductive_g4_transd
 parameters:
   batch_size:
     values:
-    - 512
     - 1024
-    - 2048
   embedding_dim:
     values:
     - 100
@@ -40,5 +38,4 @@ parameters:
     - 50
     - 100
     - 150
-    - 200
 program: kge_transd.py
