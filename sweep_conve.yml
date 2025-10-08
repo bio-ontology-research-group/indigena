@@ -23,7 +23,6 @@ parameters:
     - 0
   learning_rate:
     values:
-    - 0.0001
     - 0.001
     - 0.01
   mode:
@@ -48,17 +47,16 @@ parameters:
   kernel_width:
     values:
     - 3
-  dropout_0:
+  input_dropout:
     values:
     - 0.1
     - 0.2
     - 0.3
-  dropout_1:
+  feature_map_dropout:
     values:
     - 0.2
     - 0.3
-    - 0.4
-  dropout_2:
+  output_dropout:
     values:
     - 0.3
     - 0.5

@@ -26,7 +26,7 @@ logger.setLevel(logging.INFO)
 
 def model_resolver(triples_factory, embedding_dim, random_seed, input_channels=1, 
                   output_channels=32, embedding_height=20, kernel_height=3, 
-                  kernel_width=3, dropout_0=0.2, dropout_1=0.3, dropout_2=0.5):
+                  kernel_width=3, input_dropout=0.2, feature_map_dropout=0.3, output_dropout=0.5):
     model = ConvE(
         triples_factory=triples_factory, 
         embedding_dim=embedding_dim,
@@ -36,9 +36,9 @@ def model_resolver(triples_factory, embedding_dim, random_seed, input_channels=1
         embedding_height=embedding_height,
         kernel_height=kernel_height,
         kernel_width=kernel_width,
-        dropout_0=dropout_0,
-        dropout_1=dropout_1,
-        dropout_2=dropout_2
+        input_dropout=input_dropout,
+        feature_map_dropout=feature_map_dropout,
+        output_dropout=output_dropout
     )
     return model
 
@@ -67,17 +67,17 @@ def projector_resolver(projector_name):
 @ck.option("--embedding_height", type=int, default=20, help="Embedding height for ConvE")
 @ck.option("--kernel_height", type=int, default=3, help="Kernel height for ConvE")
 @ck.option("--kernel_width", type=int, default=3, help="Kernel width for ConvE")
-@ck.option("--dropout_0", type=float, default=0.2, help="First dropout rate for ConvE")
-@ck.option("--dropout_1", type=float, default=0.3, help="Second dropout rate for ConvE")
-@ck.option("--dropout_2", type=float, default=0.5, help="Third dropout rate for ConvE")
+@ck.option("--input_dropout", type=float, default=0.2, help="Input dropout rate for ConvE")
+@ck.option("--feature_map_dropout", type=float, default=0.3, help="Feature map dropout rate for ConvE")
+@ck.option("--output_dropout", type=float, default=0.5, help="Output dropout rate for ConvE")
 @ck.option("--random_seed", type=int, default=0, help="Random seed for reproducibility")
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
 def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim, 
          batch_size, learning_rate, num_epochs, input_channels, output_channels,
-         embedding_height, kernel_height, kernel_width, dropout_0, dropout_1, 
-         dropout_2, random_seed, only_test, description, no_sweep):
+         embedding_height, kernel_height, kernel_width, input_dropout, feature_map_dropout, 
+         output_dropout, random_seed, only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indigena", name=description)                
     if no_sweep:
@@ -90,9 +90,9 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
                    "embedding_height": embedding_height,
                    "kernel_height": kernel_height,
                    "kernel_width": kernel_width,
-                   "dropout_0": dropout_0,
-                   "dropout_1": dropout_1,
-                   "dropout_2": dropout_2,
+                   "input_dropout": input_dropout,
+                   "feature_map_dropout": feature_map_dropout,
+                   "output_dropout": output_dropout,
                    "fold": fold,
                    "mode": mode
                    })
@@ -106,9 +106,9 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         embedding_height = wandb.config.embedding_height
         kernel_height = wandb.config.kernel_height
         kernel_width = wandb.config.kernel_width
-        dropout_0 = wandb.config.dropout_0
-        dropout_1 = wandb.config.dropout_1
-        dropout_2 = wandb.config.dropout_2
+        input_dropout = wandb.config.input_dropout
+        feature_map_dropout = wandb.config.feature_map_dropout
+        output_dropout = wandb.config.output_dropout
         fold = wandb.config.fold
         mode = wandb.config.mode
     
@@ -202,13 +202,13 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
     
     model = model_resolver(triples_factory, embedding_dim, random_seed, input_channels,
                           output_channels, embedding_height, kernel_height, kernel_width,
-                          dropout_0, dropout_1, dropout_2).to("cuda")
+                          input_dropout, feature_map_dropout, output_dropout).to("cuda")
 
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
     
-    model_out_filename = f"data/models/projector_{projector_name}_model_conve_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_out_{output_channels}_eh_{embedding_height}_do_{dropout_0}_{dropout_1}_{dropout_2}_{graph_status}.pt"
-    inductive_results_out_file = f"data/results/kge_results_{projector_name}_conve_inductive_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_out_{output_channels}_eh_{embedding_height}_do_{dropout_0}_{dropout_1}_{dropout_2}_{graph_status}.tsv"
-    transductive_results_out_file = f"data/results/kge_results_{projector_name}_conve_transductive_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_out_{output_channels}_eh_{embedding_height}_do_{dropout_0}_{dropout_1}_{dropout_2}_{graph_status}.tsv"
+    model_out_filename = f"data/models/projector_{projector_name}_model_conve_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_out_{output_channels}_eh_{embedding_height}_do_{input_dropout}_{feature_map_dropout}_{output_dropout}_{graph_status}.pt"
+    inductive_results_out_file = f"data/results/kge_results_{projector_name}_conve_inductive_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_out_{output_channels}_eh_{embedding_height}_do_{input_dropout}_{feature_map_dropout}_{output_dropout}_{graph_status}.tsv"
+    transductive_results_out_file = f"data/results/kge_results_{projector_name}_conve_transductive_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_epochs_{num_epochs}_out_{output_channels}_eh_{embedding_height}_do_{input_dropout}_{feature_map_dropout}_{output_dropout}_{graph_status}.tsv"
 
     
     optimizer = Adam(params=model.get_grad_params(), lr=learning_rate)
