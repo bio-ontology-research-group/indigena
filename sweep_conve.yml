@@ -1,0 +1,73 @@
+command:
+- ${env}
+- ${interpreter}
+- ${program}
+- ${args}
+- --graph4
+method: grid
+metric:
+  goal: maximize
+  name: tmac_mrr
+name: hpo_transductive_g4_conve
+parameters:
+  batch_size:
+    values:
+    - 64
+    - 128
+    - 256
+  embedding_dim:
+    values:
+    - 200
+    - 300
+    - 400
+  fold:
+    values:
+    - 0
+  learning_rate:
+    values:
+    - 0.0001
+    - 0.001
+    - 0.01
+  mode:
+    values:
+    - transductive
+  num_epochs:
+    values:
+    - 200
+  input_channels:
+    values:
+    - 1
+  output_channels:
+    values:
+    - 16
+    - 32
+    - 64
+  embedding_height:
+    values:
+    - 10
+    - 20
+    - 25
+  kernel_height:
+    values:
+    - 3
+    - 5
+  kernel_width:
+    values:
+    - 3
+    - 5
+  dropout_0:
+    values:
+    - 0.1
+    - 0.2
+    - 0.3
+  dropout_1:
+    values:
+    - 0.2
+    - 0.3
+    - 0.4
+  dropout_2:
+    values:
+    - 0.3
+    - 0.5
+    - 0.7
+program: kge_conve.py
