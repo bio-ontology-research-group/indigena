@@ -292,6 +292,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
                 assert triple_tensor.shape == (len(eval_genes), 3), f"Triple tensor shape {triple_tensor.shape} does not match expected {(len(eval_genes), 3)}"
                 with th.no_grad():
                     transductive_scores = model.score_hrt(triple_tensor).cpu().detach().squeeze().tolist()
+                    transductive_scores = [-x for x in transductive_scores]
                     assert len(transductive_scores) == len(eval_genes), f"Transductive scores length {len(transductive_scores)} does not match number of genes {len(eval_genes)}"
                     transductive_results.append((test_gene, test_disease, gene_to_index[test_gene], transductive_scores))
                 
