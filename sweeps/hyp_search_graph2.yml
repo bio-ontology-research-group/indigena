@@ -1,0 +1,29 @@
+command:
+- ${env}
+- ${interpreter}
+- ${program}
+- ${args}
+- --graph2
+method: grid
+metric:
+  goal: maximize
+  name: mac_mrr
+parameters:
+  embedding_dim:
+    values:
+    - 100
+    - 200
+  batch_size:
+    values:
+    - 512
+    - 1024
+  learning_rate:
+    values:
+    - 0.0001
+    - 0.001
+    - 0.01
+  num_epochs:
+    values:
+    - 100
+    - 200
+program: kge.py

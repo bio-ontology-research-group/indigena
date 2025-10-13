@@ -1,0 +1,38 @@
+command:
+- ${env}
+- ${interpreter}
+- ${program}
+- ${args}
+- --graph4
+method: grid
+metric:
+  goal: maximize
+  name: tmac_mrr
+name: hpo_transductive_g4_paire
+parameters:
+  batch_size:
+    values:
+    - 512
+    - 1024
+    - 2048
+  embedding_dim:
+    values:
+    - 100
+    - 200
+    - 300
+    - 400
+  fold:
+    values:
+    - 0
+  learning_rate:
+    values:
+    - 0.001
+    - 0.01
+    - 0.1
+  mode:
+    values:
+    - transductive
+  num_epochs:
+    values:
+    - 200
+program: kge_paire.py

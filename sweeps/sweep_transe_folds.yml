@@ -1,0 +1,42 @@
+command:
+- ${env}
+- ${interpreter}
+- ${program}
+- ${args}
+- --graph4
+method: grid
+metric:
+  goal: maximize
+  name: tmac_mrr
+parameters:
+  batch_size:
+    values:
+    - 1024
+  embedding_dim:
+    values:
+    - 100
+  fold:
+    values:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+  learning_rate:
+    values:
+    - 0.001
+  mode:
+    values:
+    - transductive
+  num_epochs:
+    values:
+    - 200
+  scoring_fct_norm:
+    values:
+    - 2
+program: kge_transe.py

@@ -1,0 +1,40 @@
+command:
+- ${env}
+- ${interpreter}
+- ${program}
+- ${args}
+- --graph4
+method: grid
+metric:
+  goal: maximize
+  name: tmac_mrr
+name: hpo_transductive_g4_transe
+parameters:
+  batch_size:
+    values:
+    - 1024
+  embedding_dim:
+    values:
+    - 100
+    - 200
+    - 300
+    - 400
+  fold:
+    values:
+    - 0
+  learning_rate:
+    values:
+    - 0.001
+    - 0.01
+    - 0.1
+  mode:
+    values:
+    - transductive
+  num_epochs:
+    values:
+    - 200
+  scoring_fct_norm:
+    values:
+    - 1
+    - 2
+program: kge_transe.py
