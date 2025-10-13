@@ -157,7 +157,6 @@ def main(fold, graph2, graph3, graph4, projector_name, model_name,
     else:
         raise ValueError(f"Mode {mode} not supported.")
 
-    
     if graph4:
         for _, row in train_disease_genes.iterrows():
             disease = row['Disease']
