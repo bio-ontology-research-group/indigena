@@ -1,4 +1,4 @@
-name: indiga
+name: indigena
 channels:
   - conda-forge
 dependencies:

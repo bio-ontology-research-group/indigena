@@ -9,7 +9,7 @@
 - Java 8+
 
 ## Python KGE Methods
-- Python 3.8+
+- Python 3.10
 - mowl
 - pykeen
 - torch
@@ -18,6 +18,13 @@
 - tqdm
 - click
 
+
+# Installation
+```
+git clone https://github.com/bio-ontology-research-group/indigena.git
+cd indigena/
+conda env create -f environment.yml
+```
 
 # Usage
 
