@@ -26,11 +26,14 @@ def print_as_tex(micro_metrics, macro_metrics):
     macro_metrics = [macro_metrics['mr'], macro_metrics['mrr'], macro_metrics['hits@1'], macro_metrics['hits@3'], macro_metrics['hits@10'], macro_metrics['hits@100'], macro_metrics['auc']]
     micro_metrics = [micro_metrics['mr'], micro_metrics['mrr'], micro_metrics['hits@1'], micro_metrics['hits@3'], micro_metrics['hits@10'], micro_metrics['hits@100'], micro_metrics['auc']]
 
+
+    print("Macro metrics (averaged over pairs)")
     for m in macro_metrics:
         print(f"{m:.3f} & ", end="")
 
     print()
 
+    print("Micro metrics (averaged over diseases)")
     for m in micro_metrics:
         print(f"{m:.3f} & ", end="")
         

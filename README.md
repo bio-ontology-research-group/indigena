@@ -24,16 +24,18 @@
 git clone https://github.com/bio-ontology-research-group/indigena.git
 cd indigena/
 conda env create -f environment.yml
+conda activate indigena
 ```
 
 # Usage
 
-## 1. Extract Data
+## 1. Uncompress UPheno file
 
 First, extract the data archive:
 
 ```bash
-tar -xzf data.tar.gz
+cd data
+gunzip upheno.owl.gz
 ```
 
 ## 2. Semantic Similarity Baselines (Groovy)
@@ -54,7 +56,6 @@ groovy semantic_similarity.groovy -r data -ic resnik -pw resnik -gw bma -fold 0
 ```bash
 groovy semantic_similarity_simgic.groovy -r data -ic resnik -fold 0
 ```
-
 ### Parameters:
 - `-r, --root_dir`: Data directory (default: `data`)
 - `-ic, --ic_measure`: Information content measure (`resnik`, `sanchez`)
@@ -64,6 +65,7 @@ groovy semantic_similarity_simgic.groovy -r data -ic resnik -fold 0
 
 **Output:** Results saved to `data/baseline_results/`
 
+
 ### Evaluate results:
 ```bash
 python evaluate_sem_sim.py data/baseline_results/<results_file>
@@ -71,7 +73,10 @@ python evaluate_sem_sim.py data/baseline_results/<results_file>
 
 ## 3. Knowledge Graph Embeddings (Python)
 
-This approach uses mOWL and PyKEEN to project the ontology to triples, train KGE models, and evaluate gene-disease associations by comparing phenotype embeddings.
+This approach uses mOWL to project ontology into triples and PyKEEN to
+train KGE models.  We use W&B to track experiments. Therefore, before
+running `kge.py`, change the entity name in `wandb.init` to you W&B
+username.
 
 ### Run basic KGE model:
 ```bash

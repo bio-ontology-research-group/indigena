@@ -273,7 +273,7 @@ logger.info("Done")
 // out.close()
 
 
-logger.info("Results written to ${rootDir}/results.txt")
+logger.info("Results written to ${rootDir}/baseline_results/")
 
 
 
