@@ -4,7 +4,6 @@
 
 # Dependencies
 
-## Groovy Baselines
 - Groovy 4.0.26
 - Java 8+
 
