@@ -1,41 +1,96 @@
-# indiga
-Inductive Gene-Disease Association
+# INDIGENA: 
 
+![Graph Architectures](graphs.png)
 
 # Dependencies
 
+## Groovy Baselines
 - Groovy 4.0.26
+- Java 8+
+
+## Python KGE Methods
+- Python 3.8+
+- mowl
+- pykeen
+- torch
+- wandb
+- pandas
+- tqdm
+- click
 
 
 # Usage
 
-To run baselines:
+## 1. Extract Data
 
+First, extract the data archive:
+
+```bash
+tar -xzf data.tar.gz
 ```
-groovy semantic_similarity.groovy
-python evaluate_sem_sim.py <filename>
+
+## 2. Semantic Similarity Baselines (Groovy)
+
+These baseline methods compute ontology-based semantic similarity between genes and diseases using the SLIB library.
+
+### Run with default parameters:
+```bash
+groovy semantic_similarity.groovy -r data -fold 0
 ```
 
+### Run with custom parameters:
+```bash
+groovy semantic_similarity.groovy -r data -ic resnik -pw resnik -gw bma -fold 0
+```
 
-# Preliminary results
+### Run SimGIC variant:
+```bash
+groovy semantic_similarity_simgic.groovy -r data -ic resnik -fold 0
+```
 
-## Macro Metrics
+### Parameters:
+- `-r, --root_dir`: Data directory (default: `data`)
+- `-ic, --ic_measure`: Information content measure (`resnik`, `sanchez`)
+- `-pw, --pairwise_measure`: Pairwise measure (`resnik`, `lin`)
+- `-gw, --groupwise_measure`: Groupwise measure (`bma`, `bmm`)
+- `-fold`: Cross-validation fold number (default: 0)
 
-| Model  | MR      | MRR   | Hits@1 | Hits@3 | Hits@10 | Hits@100 | AUC   |
-|--------|---------|-------|--------|--------|---------|----------|-------|
-| Resnik | 161.288 | 0.139 | 0.063  | 0.140  | 0.302   | 0.640    | 0.897 |
-| Graph1 | 155.153 | 0.144 | 0.059  | 0.167  | 0.306   | 0.640    | 0.901 |
-| Graph2 | 135.545 | 0.151 | 0.077  | 0.158  | 0.306   | 0.667    | 0.913 |
-| Graph3 | 185.662 | 0.124 | 0.059  | 0.126  | 0.284   | 0.604    | 0.881 |
-| Graph4 | 160.590 | 0.131 | 0.063  | 0.135  | 0.275   | 0.667    | 0.897 |
+**Output:** Results saved to `data/baseline_results/`
 
-## Micro Metrics
+### Evaluate results:
+```bash
+python evaluate_sem_sim.py data/baseline_results/<results_file>
+```
 
-| Model  | MR      | MRR   | Hits@1 | Hits@3 | Hits@10 | Hits@100 | AUC   |
-|--------|---------|-------|--------|--------|---------|----------|-------|
-| Resnik | 183.885 | 0.146 | 0.070  | 0.159  | 0.294   | 0.632    | 0.885 |
-| Graph1 | 154.247 | 0.149 | 0.069  | 0.160  | 0.308   | 0.640    | 0.907 |
-| Graph2 | 147.641 | 0.138 | 0.066  | 0.141  | 0.300   | 0.638    | 0.908 |
-| Graph3 | 200.482 | 0.134 | 0.075  | 0.134  | 0.278   | 0.583    | 0.876 |
-| Graph4 | 166.224 | 0.123 | 0.060  | 0.132  | 0.235   | 0.665    | 0.896 |
+## 3. Knowledge Graph Embeddings (Python)
+
+This approach uses mOWL and PyKEEN to project the ontology to triples, train KGE models, and evaluate gene-disease associations by comparing phenotype embeddings.
+
+### Run basic KGE model:
+```bash
+python kge.py --fold 0 --model_name transd --mode inductive --graph2 --no_sweep
+```
+
+### Run with hyperparameters:
+```bash
+python kge.py --fold 0 --model_name transd --mode inductive \
+  --embedding_dim 100 --batch_size 128 --learning_rate 0.001 \
+  --num_epochs 100 --graph2 
+```
+
+### Parameters:
+- `--fold`: Cross-validation fold number
+- `--model_name`: KGE model (`transe`, `transd`, `distmult`, `paire`)
+- `--mode`: Evaluation mode (`inductive`, `transductive`)
+- `--graph2`: Add gene-phenotype edges
+- `--graph3`: Add disease-phenotype edges
+- `--graph4`: Add gene-disease training edges
+- `--embedding_dim`: Embedding dimensions
+- `--batch_size`: Training batch size
+- `--learning_rate`: Learning rate
+- `--num_epochs`: Training epochs
+- `--only_test`: Only test existing model (skip training)
+- `--description`: Weights & Biases run description
+- `--no_sweep`: Disable W&B sweep mode
+
 

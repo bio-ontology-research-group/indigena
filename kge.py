@@ -4,7 +4,7 @@ mowl.init_jvm("10g")
 from mowl.projection import OWL2VecStarProjector, Edge
 from mowl.datasets import PathDataset
 from mowl.utils.random import seed_everything
-from pykeen.models import TransE, TransD, ConvE, PairRE, DistMult
+from pykeen.models import TransE, TransD, PairRE, DistMult
 from pykeen.training import SLCWATrainingLoop
 import torch as th
 from torch.optim import Adam
@@ -31,8 +31,6 @@ def model_resolver(model_name, triples_factory, embedding_dim, random_seed):
         model = TransD(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
     elif model_name.lower() == "distmult":
         model = DistMult(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
-    elif model_name.lower() == "conve":
-        model = ConvE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
     elif model_name.lower() == "paire":
         model = PairRE(triples_factory=triples_factory, embedding_dim=embedding_dim, random_seed=random_seed)
     else:
