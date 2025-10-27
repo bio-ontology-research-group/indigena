@@ -287,12 +287,18 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
             if mode == "transductive":
                 gene_ids = th.tensor([entity_to_id[gene] for gene in eval_genes])
                 disease_id = th.tensor([entity_to_id[test_disease]]).repeat(len(eval_genes))
-                relation_id = th.tensor([relation_to_id['associated_with']]).repeat(len(eval_genes))
-                triple_tensor = th.stack([gene_ids, relation_id, disease_id], dim=1).to("cuda")
-                assert triple_tensor.shape == (len(eval_genes), 3), f"Triple tensor shape {triple_tensor.shape} does not match expected {(len(eval_genes), 3)}"
+                if graph4:
+                    relation_id = th.tensor([relation_to_id['associated_with']]).repeat(len(eval_genes))
+                    triple_tensor = th.stack([gene_ids, relation_id, disease_id], dim=1).to("cuda")
+                    assert triple_tensor.shape == (len(eval_genes), 3), f"Triple tensor shape {triple_tensor.shape} does not match expected {(len(eval_genes), 3)}"
                 with th.no_grad():
-                    transductive_scores = model.score_hrt(triple_tensor).cpu().detach().squeeze().tolist()
-                    transductive_scores = [-x for x in transductive_scores]
+                    if graph4:
+                        transductive_scores = model.score_hrt(triple_tensor).cpu().detach().squeeze().tolist()
+                        transductive_scores = [-x for x in transductive_scores]
+                    elif graph3:
+                        gene_embeddings = model.entity_representations[0](indices=gene_ids.to("cuda"))
+                        disease_embeddings = model.entity_representations[0](indices=disease_id.to("cuda"))
+                        transductive_scores = th.sigmoid(th.sum(gene_embeddings * disease_embeddings, dim=1)).cpu().detach().squeeze().tolist()
                     assert len(transductive_scores) == len(eval_genes), f"Transductive scores length {len(transductive_scores)} does not match number of genes {len(eval_genes)}"
                     transductive_results.append((test_gene, test_disease, gene_to_index[test_gene], transductive_scores))
                 
