@@ -39,12 +39,13 @@ def print_as_tex(micro_metrics, macro_metrics):
         
                                         
     
-def compute_metrics(filename):
+def compute_metrics(filename, verbose=False):
     with open(filename, "r") as f:
         results = f.readlines()
         results = [x.strip().split("\t") for x in results]
 
-    print(f"Number of results: {len(results)}")
+    if verbose:
+        print(f"Number of results: {len(results)}")
 
     mr = 0
     mrr = 0
@@ -60,7 +61,8 @@ def compute_metrics(filename):
     # results = results[:2]
 
     genes_ids = th.arange(len(results[0][3:]))
-    print(f"Number of evaluated genes: {len(genes_ids)}")
+    if verbose:
+        print(f"Number of evaluated genes: {len(genes_ids)}")
 
     for i in range(len(results)):
         disease = results[i][1]
@@ -151,8 +153,8 @@ def compute_metrics(filename):
     for k in mean_micro_hits_k:
         micro_metrics[f"hits@{k}"] = mean_micro_hits_k[k]
 
-
-    print(f"Number of genes: {len(scores)}")
+    if verbose:
+        print(f"Number of genes: {len(scores)}")
     return micro_metrics, macro_metrics
         
     # metrics = {f"test_micro_{k}": v for k, v in micro_metrics.items()}
