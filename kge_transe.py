@@ -68,7 +68,6 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         wandb.log({"embedding_dim": embedding_dim,
                    "batch_size": batch_size,
                    "learning_rate": learning_rate,
-                   "num_epochs": num_epochs,
                    "scoring_fct_norm": scoring_fct_norm,
                    "fold": fold,
                    "mode": mode
@@ -77,7 +76,6 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         embedding_dim = wandb.config.embedding_dim
         batch_size = wandb.config.batch_size
         learning_rate = wandb.config.learning_rate
-        num_epochs = wandb.config.num_epochs
         scoring_fct_norm = wandb.config.scoring_fct_norm
         fold = wandb.config.fold
         mode = wandb.config.mode
