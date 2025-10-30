@@ -51,7 +51,7 @@ def projector_resolver(projector_name):
 @ck.option("--projector_name", type=ck.Choice(["owl2vecstar"]), default="owl2vecstar", help="Projector to use for ontology projection")
 @ck.option("--mode", type=ck.Choice(["inductive", "transductive"]), default="inductive", help="Inductive or transductive setting")
 @ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for the KGE model")
-@ck.option("--batch_size", type=int, default=8096, help="Batch size for training")
+@ck.option("--batch_size", type=int, default=2048, help="Batch size for training")
 @ck.option("--learning_rate", type=float, default=0.001, help="Learning rate for the optimizer")
 @ck.option("--num_epochs", type=int, default=1000, help="Number of training epochs")
 @ck.option("--scoring_fct_norm", type=int, default=2, help="Norm for TransE scoring function (1 or 2)")
