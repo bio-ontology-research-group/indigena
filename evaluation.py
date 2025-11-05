@@ -101,12 +101,12 @@ def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_ge
                 with th.no_grad():
                     if graph4:
                         transductive_function_scores = model.score_hrt(triple_tensor).cpu().detach().squeeze().tolist()
-                    
+                        assert len(transductive_function_scores) == len(eval_genes), f"Transductive function scores length {len(transductive_function_scores)} does not match number of genes {len(eval_genes)}"
                     gene_embeddings = model.entity_representations[0](indices=gene_ids.to("cuda"))
                     disease_embeddings = model.entity_representations[0](indices=disease_id.to("cuda"))
                     transductive_sim_scores = th.sigmoid(th.sum(gene_embeddings * disease_embeddings, dim=1)).cpu().detach().squeeze().tolist()
 
-                    assert len(transductive_function_scores) == len(eval_genes), f"Transductive function scores length {len(transductive_function_scores)} does not match number of genes {len(eval_genes)}"
+                    
                     assert len(transductive_sim_scores) == len(eval_genes), f"Transductive sim scores length {len(transductive_sim_scores)} does not match number of genes {len(eval_genes)}"
                     transductive_sim_results.append((test_gene, test_disease, gene_to_index[test_gene], transductive_sim_scores))
                     if graph4:
