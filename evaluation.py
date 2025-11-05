@@ -75,8 +75,9 @@ def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_ge
     logger.debug(f"Example test pair: {test_pairs[0]}")
 
     inductive_results = []
-    transductive_results = []
-
+    transductive_function_results = []
+    transductive_sim_results = []
+    
     with tqdm(total=len(test_pairs), desc='Evaluating', leave=False) as pbar:
         for test_disease, test_gene in test_pairs:
 
@@ -99,22 +100,25 @@ def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_ge
                     assert triple_tensor.shape == (len(eval_genes), 3), f"Triple tensor shape {triple_tensor.shape} does not match expected {(len(eval_genes), 3)}"
                 with th.no_grad():
                     if graph4:
-                        transductive_scores = model.score_hrt(triple_tensor).cpu().detach().squeeze().tolist()
-                    elif graph3:
-                        gene_embeddings = model.entity_representations[0](indices=gene_ids.to("cuda"))
-                        disease_embeddings = model.entity_representations[0](indices=disease_id.to("cuda"))
-                        transductive_scores = th.sigmoid(th.sum(gene_embeddings * disease_embeddings, dim=1)).cpu().detach().squeeze().tolist()
-                    assert len(transductive_scores) == len(eval_genes), f"Transductive scores length {len(transductive_scores)} does not match number of genes {len(eval_genes)}"
-                    transductive_results.append((test_gene, test_disease, gene_to_index[test_gene], transductive_scores))
+                        transductive_function_scores = model.score_hrt(triple_tensor).cpu().detach().squeeze().tolist()
+                    
+                    gene_embeddings = model.entity_representations[0](indices=gene_ids.to("cuda"))
+                    disease_embeddings = model.entity_representations[0](indices=disease_id.to("cuda"))
+                    transductive_sim_scores = th.sigmoid(th.sum(gene_embeddings * disease_embeddings, dim=1)).cpu().detach().squeeze().tolist()
+
+                    assert len(transductive_function_scores) == len(eval_genes), f"Transductive function scores length {len(transductive_function_scores)} does not match number of genes {len(eval_genes)}"
+                    assert len(transductive_sim_scores) == len(eval_genes), f"Transductive sim scores length {len(transductive_sim_scores)} does not match number of genes {len(eval_genes)}"
+                    transductive_sim_results.append((test_gene, test_disease, gene_to_index[test_gene], transductive_sim_scores))
+                    if graph4:
+                        transductive_function_results.append((test_gene, test_disease, gene_to_index[test_gene], transductive_function_scores))
 
             pbar.update()
 
     # Compute metrics
-    inductive_micro_metrics = None
     inductive_macro_metrics = None
-    transductive_micro_metrics = None
-    transductive_macro_metrics = None
-
+    transductive_sim_macro_metrics = None
+    transductive_function_macro_metrics = None
+    
     if output_file_prefix:
         inductive_results_out_file = f"{output_file_prefix}_inductive.tsv"
         with open(inductive_results_out_file, "w") as f:
@@ -125,22 +129,35 @@ def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_ge
         inductive_micro_metrics, inductive_macro_metrics = compute_metrics(inductive_results_out_file, verbose=verbose)
         if verbose:
             print(f"Inductive results saved to {inductive_results_out_file}")
-            print_as_tex(inductive_micro_metrics, inductive_macro_metrics)
+            print_as_tex(inductive_macro_metrics, "Inductive")
 
         if mode == "transductive":
-            transductive_results_out_file = f"{output_file_prefix}_transductive.tsv"
-            with open(transductive_results_out_file, "w") as f:
-                for gene, disease, gene_index, scores in transductive_results:
+            transductive_results_sim_out_file = f"{output_file_prefix}_transductive_sim.tsv"
+            with open(transductive_results_sim_out_file, "w") as f:
+                for gene, disease, gene_index, scores in transductive_sim_results:
                     scores_str = "\t".join([str(score) for score in scores])
                     f.write(f"{gene}\t{disease}\t{gene_index}\t{scores_str}\n")
 
-            transductive_micro_metrics, transductive_macro_metrics = compute_metrics(transductive_results_out_file)
+            _, transductive_sim_macro_metrics = compute_metrics(transductive_results_sim_out_file)
             if verbose:
-                print(f"Transductive results saved to {transductive_results_out_file}")
-                print_as_tex(transductive_micro_metrics, transductive_macro_metrics)
+                print_as_tex(transductive_sim_macro_metrics, "Transductive Similarity")
 
-    return (inductive_results, inductive_micro_metrics, inductive_macro_metrics,
-            transductive_results, transductive_micro_metrics, transductive_macro_metrics)
+            
+            if graph4:
+                transductive_results_function_out_file = f"{output_file_prefix}_transductive_function.tsv"
+                with open(transductive_results_function_out_file, "w") as f:
+                    for gene, disease, gene_index, scores in transductive_function_results:
+                        scores_str = "\t".join([str(score) for score in scores])
+                        f.write(f"{gene}\t{disease}\t{gene_index}\t{scores_str}\n")
+
+                _, transductive_function_macro_metrics = compute_metrics(transductive_results_function_out_file)
+                if verbose:
+                    print_as_tex(transductive_function_macro_metrics, "Transductive Function")
+                
+                        
+    return (inductive_macro_metrics,
+            transductive_sim_macro_metrics,
+            transductive_function_macro_metrics)
 
 
 def compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts, criterion="bma"):
