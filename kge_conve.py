@@ -62,7 +62,6 @@ def projector_resolver(projector_name):
 @ck.option("--embedding_dim", type=int, default=200, help="Embedding dimension for the KGE model")
 @ck.option("--batch_size", type=int, default=64, help="Batch size for training")
 @ck.option("--learning_rate", type=float, default=0.0001, help="Learning rate for the optimizer")
-@ck.option("--num_epochs", type=int, default=100, help="Number of training epochs")
 @ck.option("--input_channels", type=int, default=1, help="Input channels for ConvE")
 @ck.option("--output_channels", type=int, default=32, help="Output channels for ConvE")
 @ck.option("--embedding_height", type=int, default=20, help="Embedding height for ConvE")
@@ -75,9 +74,9 @@ def projector_resolver(projector_name):
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
-def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim, 
-         batch_size, learning_rate, num_epochs, input_channels, output_channels,
-         embedding_height, kernel_height, kernel_width, input_dropout, feature_map_dropout, 
+def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
+         batch_size, learning_rate, input_channels, output_channels,
+         embedding_height, kernel_height, kernel_width, input_dropout, feature_map_dropout,
          output_dropout, random_seed, only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indigena", name=description)                
@@ -85,7 +84,6 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         wandb.log({"embedding_dim": embedding_dim,
                    "batch_size": batch_size,
                    "learning_rate": learning_rate,
-                   "num_epochs": num_epochs,
                    "input_channels": input_channels,
                    "output_channels": output_channels,
                    "embedding_height": embedding_height,
@@ -101,7 +99,6 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         embedding_dim = wandb.config.embedding_dim
         batch_size = wandb.config.batch_size
         learning_rate = wandb.config.learning_rate
-        num_epochs = wandb.config.num_epochs
         input_channels = wandb.config.input_channels
         output_channels = wandb.config.output_channels
         embedding_height = wandb.config.embedding_height
@@ -212,7 +209,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
 
     file_identifier = f"conve_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_out_{output_channels}_eh_{embedding_height}_do_{input_dropout}_{feature_map_dropout}_{output_dropout}_{graph_status}"
-    model_out_filename = f"data/models/{file_identifier}_epochs_{num_epochs}.pt"
+    model_out_filename = f"data/models/{file_identifier}.pt"
 
     # Build gene2pheno and disease2pheno mappings (needed for validation and testing)
     gene2pheno = dict()

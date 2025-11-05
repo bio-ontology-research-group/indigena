@@ -54,7 +54,6 @@ def projector_resolver(projector_name):
 @ck.option("--embedding_dim", type=int, default=200, help="Embedding dimension for the KGE model")
 @ck.option("--batch_size", type=int, default=2048, help="Batch size for training")
 @ck.option("--learning_rate", type=float, default=0.001, help="Learning rate for the optimizer")
-@ck.option("--num_epochs", type=int, default=1000, help="Number of training epochs")
 @ck.option("--hidden_dropout_rate", type=float, default=0.0, help="Hidden dropout rate for ConvKB")
 @ck.option("--num_filters", type=int, default=100, help="Number of convolutional filters for ConvKB")
 @ck.option("--random_seed", type=int, default=0, help="Random seed for reproducibility")
@@ -62,7 +61,7 @@ def projector_resolver(projector_name):
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
 def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
-         batch_size, learning_rate, num_epochs, hidden_dropout_rate, num_filters,
+         batch_size, learning_rate, hidden_dropout_rate, num_filters,
          random_seed, only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indigena", name=description)
@@ -70,7 +69,6 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         wandb.log({"embedding_dim": embedding_dim,
                    "batch_size": batch_size,
                    "learning_rate": learning_rate,
-                   "num_epochs": num_epochs,
                    "hidden_dropout_rate": hidden_dropout_rate,
                    "num_filters": num_filters,
                    "fold": fold,
@@ -80,7 +78,6 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         embedding_dim = wandb.config.embedding_dim
         batch_size = wandb.config.batch_size
         learning_rate = wandb.config.learning_rate
-        num_epochs = wandb.config.num_epochs
         hidden_dropout_rate = wandb.config.hidden_dropout_rate
         num_filters = wandb.config.num_filters
         fold = wandb.config.fold
@@ -185,7 +182,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
 
     file_identifier = f"convkb_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_hdr_{hidden_dropout_rate}_nf_{num_filters}_{graph_status}"
-    model_out_filename = f"data/models/{file_identifier}_epochs_{num_epochs}.pt"
+    model_out_filename = f"data/models/{file_identifier}.pt"
 
     # Build gene2pheno and disease2pheno mappings (needed for validation and testing)
     gene2pheno = dict()
