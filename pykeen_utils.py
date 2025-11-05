@@ -56,8 +56,9 @@ class ValidationStopper(Stopper):
             self.model.eval()
             val_output_prefix = f"data/results/validation_{self.file_identifier}"
 
-            (_, val_inductive_micro_metrics, val_inductive_macro_metrics,
-             _, val_transductive_micro_metrics, val_transductive_macro_metrics) = evaluate_model(
+            (val_inductive_macro_metrics,
+             val_transductive_sim_macro_metrics,
+             val_transductive_function_macro_metrics) = evaluate_model(
                 model=self.model,
                 test_disease_genes=self.val_disease_genes,
                 gene2pheno=self.gene2pheno,
@@ -71,23 +72,22 @@ class ValidationStopper(Stopper):
             )
 
             # Choose validation metric based on graph mode
-            if (self.graph3 or self.graph4):
-                val_mr = val_transductive_micro_metrics['mr']
-                val_mrr = val_transductive_micro_metrics['mrr']
-                metric_type = "transductive"
+            if self.graph4:
+                val_mr = val_transductive_function_macro_metrics['mr']
+                metric_type = "transductive_function"
+            elif self.graph3:
+                val_mr = val_transductive_sim_macro_metrics['mr']
             else:
-                val_mr = val_inductive_micro_metrics['mr']
-                val_mrr = val_inductive_micro_metrics['mrr']
+                val_mr = val_inductive_macro_metrics['mr']
                 metric_type = "inductive"
 
             if val_mr < self.best_val_mr:
                 self.best_val_mr = val_mr
                 self.curr_tolerance = self.tolerance
                 th.save(self.model.state_dict(), self.model_out_filename)
-                logger.info(f"\nEpoch {epoch} - New best validation {metric_type} MR: {val_mr:.4f} - New validation MRR: {val_mrr:.4f}. Model saved.")
+                logger.info(f"\nEpoch {epoch} - New best validation {metric_type} MR: {val_mr:.4f}. Model saved.")
             else:
                 self.curr_tolerance -= 1
-
 
             logger.info(f"Epoch {epoch}, Val {metric_type} MR: {val_mr:.4f}, Best Val MR: {self.best_val_mr:.4f}, Tolerance left: {self.curr_tolerance}")
 
