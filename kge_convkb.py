@@ -4,7 +4,7 @@ mowl.init_jvm("10g")
 from mowl.projection import OWL2VecStarProjector, Edge
 from mowl.datasets import PathDataset
 from mowl.utils.random import seed_everything
-from pykeen.models import TransR
+from pykeen.models import ConvKB
 from pykeen.training import SLCWATrainingLoop
 from pykeen.training.callbacks import StopperTrainingCallback
 import torch as th
@@ -25,12 +25,13 @@ handler = logging.StreamHandler()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
-def model_resolver(triples_factory, embedding_dim, relation_dim, random_seed):
-    model = TransR(
+def model_resolver(triples_factory, embedding_dim, random_seed, hidden_dropout_rate=0.0, num_filters=400):
+    model = ConvKB(
         triples_factory=triples_factory,
         embedding_dim=embedding_dim,
-        relation_dim=relation_dim,
-        random_seed=random_seed
+        random_seed=random_seed,
+        hidden_dropout_rate=hidden_dropout_rate,
+        num_filters=num_filters
     )
     return model
 
@@ -50,32 +51,35 @@ def projector_resolver(projector_name):
 @ck.option("--graph4", is_flag=True, help="Use graph4")
 @ck.option("--projector_name", type=ck.Choice(["owl2vecstar"]), default="owl2vecstar", help="Projector to use for ontology projection")
 @ck.option("--mode", type=ck.Choice(["inductive", "transductive"]), default="inductive", help="Inductive or transductive setting")
-@ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for entities")
-@ck.option("--relation_dim", type=int, default=50, help="Embedding dimension for relations")
+@ck.option("--embedding_dim", type=int, default=200, help="Embedding dimension for the KGE model")
 @ck.option("--batch_size", type=int, default=2048, help="Batch size for training")
 @ck.option("--learning_rate", type=float, default=0.001, help="Learning rate for the optimizer")
+@ck.option("--hidden_dropout_rate", type=float, default=0.0, help="Hidden dropout rate for ConvKB")
+@ck.option("--num_filters", type=int, default=100, help="Number of convolutional filters for ConvKB")
 @ck.option("--random_seed", type=int, default=0, help="Random seed for reproducibility")
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
 def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
-         relation_dim, batch_size, learning_rate, random_seed,
-         only_test, description, no_sweep):
+         batch_size, learning_rate, hidden_dropout_rate, num_filters,
+         random_seed, only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indigena", name=description)
     if no_sweep:
         wandb.log({"embedding_dim": embedding_dim,
-                   "relation_dim": relation_dim,
                    "batch_size": batch_size,
                    "learning_rate": learning_rate,
+                   "hidden_dropout_rate": hidden_dropout_rate,
+                   "num_filters": num_filters,
                    "fold": fold,
                    "mode": mode
                    })
     else:
         embedding_dim = wandb.config.embedding_dim
-        relation_dim = wandb.config.relation_dim
         batch_size = wandb.config.batch_size
         learning_rate = wandb.config.learning_rate
+        hidden_dropout_rate = wandb.config.hidden_dropout_rate
+        num_filters = wandb.config.num_filters
         fold = wandb.config.fold
         mode = wandb.config.mode
 
@@ -172,11 +176,12 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
     mowl_triples = [Edge(src, rel, dst) for src, rel, dst in triples]
     triples_factory = Edge.as_pykeen(mowl_triples)
 
-    model = model_resolver(triples_factory, embedding_dim, relation_dim, random_seed).to("cuda")
+    model = model_resolver(triples_factory, embedding_dim, random_seed,
+                          hidden_dropout_rate, num_filters).to("cuda")
 
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
 
-    file_identifier = f"transr_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_rel_{relation_dim}_bs_{batch_size}_lr_{learning_rate}_{graph_status}"
+    file_identifier = f"convkb_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_hdr_{hidden_dropout_rate}_nf_{num_filters}_{graph_status}"
     model_out_filename = f"data/models/{file_identifier}.pt"
 
     # Build gene2pheno and disease2pheno mappings (needed for validation and testing)

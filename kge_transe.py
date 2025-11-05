@@ -53,14 +53,13 @@ def projector_resolver(projector_name):
 @ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension for the KGE model")
 @ck.option("--batch_size", type=int, default=2048, help="Batch size for training")
 @ck.option("--learning_rate", type=float, default=0.001, help="Learning rate for the optimizer")
-@ck.option("--num_epochs", type=int, default=1000, help="Number of training epochs")
 @ck.option("--scoring_fct_norm", type=int, default=2, help="Norm for TransE scoring function (1 or 2)")
 @ck.option("--random_seed", type=int, default=0, help="Random seed for reproducibility")
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
-def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim, 
-         batch_size, learning_rate, num_epochs, scoring_fct_norm, random_seed, 
+def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
+         batch_size, learning_rate, scoring_fct_norm, random_seed,
          only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indigena", name=description)                
@@ -177,7 +176,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
 
     file_identifier = f"transe_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_norm_{scoring_fct_norm}_{graph_status}"
-    model_out_filename = f"data/models/{file_identifier}_epochs_{num_epochs}.pt"
+    model_out_filename = f"data/models/{file_identifier}.pt"
 
     # Build gene2pheno and disease2pheno mappings (needed for validation and testing)
     gene2pheno = dict()

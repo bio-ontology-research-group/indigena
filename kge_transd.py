@@ -97,16 +97,13 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
     test_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/test.csv")
     test_diseases = set(test_disease_genes['Disease'].values)
 
-        
     edges_file, projector = projector_resolver(projector_name)
 
     if not os.path.exists(edges_file):
         ds = PathDataset("data/upheno.owl")
 
-        # Project ontology using OWL2VecStarProjector
         train_edges = projector.project(ds.ontology)
 
-        # Write edges to a file
         with open(edges_file, "w") as f:
             for edge in train_edges:
                 f.write(f"{edge.src}\t{edge.rel}\t{edge.dst}\n")
@@ -243,8 +240,9 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
     # Evaluate on test set
     output_prefix = f"data/results/kge_results_{file_identifier}"
 
-    (inductive_results, inductive_micro_metrics, inductive_macro_metrics,
-     transductive_results, transductive_micro_metrics, transductive_macro_metrics) = evaluate_model(
+    (inductive_macro_metrics,
+     transductive_sim_macro_metrics,
+     transductive_function_macro_metrics) = evaluate_model(
          model=model,
          test_disease_genes=test_disease_genes,
          gene2pheno=gene2pheno,
@@ -261,13 +259,14 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
     # Log test metrics to wandb
     metrics = ['mr', 'mrr', 'auc', 'hits@1', 'hits@3', 'hits@10', 'hits@100']
     macro_to_log = {f"test_imac_{k}": v for k, v in inductive_macro_metrics.items() if k in metrics}
-    micro_to_log = {f"test_imic_{k}": v for k, v in inductive_micro_metrics.items() if k in metrics}
-    wandb.log({**macro_to_log, **micro_to_log})
+    wandb.log(macro_to_log)
 
     if mode == "transductive":
-        macro_to_log = {f"test_tmac_{k}": v for k, v in transductive_macro_metrics.items() if k in metrics}
-        micro_to_log = {f"test_tmic_{k}": v for k, v in transductive_micro_metrics.items() if k in metrics}
-        wandb.log({**macro_to_log, **micro_to_log})
+        macro_sim_to_log = {f"test_sim_tmac_{k}": v for k, v in transductive_sim_macro_metrics.items() if k in metrics}
+        wandb.log(macro_sim_to_log)
+        if graph4:
+            macro_func_to_log = {f"test_func_tmac_{k}": v for k, v in transductive_function_macro_metrics.items() if k in metrics}
+            wandb.log(macro_func_to_log)
 
     
 if __name__ == "__main__":
