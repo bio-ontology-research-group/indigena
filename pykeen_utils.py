@@ -72,11 +72,11 @@ class ValidationStopper(Stopper):
             )
 
             # Choose validation metric based on graph mode
-            if self.graph4 and mode == "transductive":
+            if self.graph4 and self.mode == "transductive":
                 val_mr = val_transductive_function_macro_metrics['mr']
                 metric_type = "transductive_function"
                 
-            elif self.graph3 and mode == "transductive":
+            elif self.graph3 and self.mode == "transductive":
                 val_mr = val_transductive_sim_macro_metrics['mr']
                 metric_type = "transductive_similarity"
             else:
