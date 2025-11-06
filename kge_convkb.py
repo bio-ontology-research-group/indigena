@@ -102,7 +102,6 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
         wandb.log({"embedding_dim": embedding_dim,
                    "batch_size": batch_size,
                    "learning_rate": learning_rate,
-                   "hidden_dropout_rate": hidden_dropout_rate,
                    "num_filters": num_filters,
                    "fold": fold,
                    "mode": mode,
@@ -112,7 +111,6 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
         embedding_dim = wandb.config.embedding_dim
         batch_size = wandb.config.batch_size
         learning_rate = wandb.config.learning_rate
-        hidden_dropout_rate = wandb.config.hidden_dropout_rate
         num_filters = wandb.config.num_filters
         fold = wandb.config.fold
         mode = wandb.config.mode
@@ -226,7 +224,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
 
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
 
-    file_identifier = f"convkb_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_hdr_{hidden_dropout_rate}_nf_{num_filters}_{graph_status}"
+    file_identifier = f"convkb_{pretrained_model}_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_hdr_{hidden_dropout_rate}_nf_{num_filters}_{graph_status}"
     model_out_filename = f"data/models/{file_identifier}.pt"
 
     # Build gene2pheno and disease2pheno mappings (needed for validation and testing)
