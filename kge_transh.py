@@ -29,7 +29,9 @@ def model_resolver(triples_factory, embedding_dim, random_seed):
     model = TransH(
         triples_factory=triples_factory,
         embedding_dim=embedding_dim,
-        random_seed=random_seed
+        random_seed=random_seed,
+        # power_norm=True,
+        scoring_fct_norm=1,
     )
     return model
 
@@ -166,7 +168,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
 
     triples = sorted(triples)
     mowl_triples = [Edge(src, rel, dst) for src, rel, dst in triples]
-    triples_factory = Edge.as_pykeen(mowl_triples)
+    triples_factory = Edge.as_pykeen(mowl_triples, create_inverse_triples=True)
 
     model = model_resolver(triples_factory, embedding_dim, random_seed).to("cuda")
 
