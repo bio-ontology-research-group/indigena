@@ -112,6 +112,6 @@ You can look at the hyperparameters in each script. They usually look like this:
 - `--no_sweep`: Disable W&B sweep mode
 - `--pretrained_model`: Features to initialize ConvKB embeddings (`transe`, `transd`). 
 
-## Problmes running the models?
+## Problems running the models?
 
 Please create a Github issue or PR!
