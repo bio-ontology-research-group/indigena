@@ -84,19 +84,22 @@ username.
 
 ### Run basic KGE model:
 ```bash
-python kge.py --fold 0 --model_name transd --mode inductive --graph2 --no_sweep
+python kge_transe.py --fold 0 --model_name transd --mode inductive --graph2 --no_sweep
 ```
 
 ### Run with hyperparameters:
 ```bash
-python kge.py --fold 0 --model_name transd --mode inductive \
+python kge_transd.py --fold 0 --model_name transd --mode inductive \
   --embedding_dim 100 --batch_size 128 --learning_rate 0.001 \
-  --num_epochs 100 --graph2 
+  --graph2 
 ```
 
 ### Parameters:
+
+You can look at the hyperparameters in each script. They usually look like this:
+
 - `--fold`: Cross-validation fold number
-- `--model_name`: KGE model (`transe`, `transd`, `distmult`, `paire`)
+- `--model_name`: KGE model (`transe`, `transd`, `convkb`)
 - `--mode`: Evaluation mode (`inductive`, `transductive`)
 - `--graph2`: Add gene-phenotype edges
 - `--graph3`: Add disease-phenotype edges
@@ -104,9 +107,11 @@ python kge.py --fold 0 --model_name transd --mode inductive \
 - `--embedding_dim`: Embedding dimensions
 - `--batch_size`: Training batch size
 - `--learning_rate`: Learning rate
-- `--num_epochs`: Training epochs
 - `--only_test`: Only test existing model (skip training)
 - `--description`: Weights & Biases run description
 - `--no_sweep`: Disable W&B sweep mode
+- `--pretrained_model`: Features to initialize ConvKB embeddings (`transe`, `transd`). 
 
+## Problmes running the models?
 
+Please raise Github issue!
