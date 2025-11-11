@@ -1,6 +1,11 @@
 # INDIGENA: 
 
-![Graph Architectures](graphs.png)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="fig/graphs_dark_bg.png">
+  <source media="(prefers-color-scheme: light)" srcset="fig/graphs_white_bg.png">
+  <img alt="Graph Structures">
+</picture>
 
 # Dependencies
 

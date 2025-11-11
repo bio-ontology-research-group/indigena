@@ -6,7 +6,7 @@
 #SBATCH -e err/indigena.%J.err
 #SBATCH --mail-user=fernando.zhapacamacho@kaust.edu.sa
 #SBATCH --mail-type=ALL
-#SBATCH --time=6:00:00
+#SBATCH --time=0:30:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=[v100]
