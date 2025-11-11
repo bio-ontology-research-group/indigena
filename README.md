@@ -114,4 +114,4 @@ You can look at the hyperparameters in each script. They usually look like this:
 
 ## Problmes running the models?
 
-Please raise Github issue!
+Please create a Github issue or PR!
