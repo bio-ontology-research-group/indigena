@@ -7,7 +7,7 @@ import pandas as pd
 import torch as th
 import click as ck
 import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
+import umap
 import numpy as np
 from data import create_train_val_split
 
@@ -15,11 +15,11 @@ from data import create_train_val_split
 @ck.option("--graph", type=ck.Choice(["graph1", "graph2", "graph3", "graph4"]), required=True)
 @ck.option("--fold", type=str, required=True, help="Path to the trained model file")
 @ck.option("--edges_file", type=str, default="data/upheno_owl2vecstar_edges.tsv", help="Path to edges file")
-@ck.option("--perplexity", type=int, default=30, help="Perplexity parameter for t-SNE")
+@ck.option("--n_neighbors", type=int, default=15, help="Number of neighbors for UMAP")
 @ck.option("--max_samples", type=int, default=10000, help="Maximum number of samples per phenotype type")
-def main(graph, fold, edges_file, perplexity, max_samples):
+def main(graph, fold, edges_file, n_neighbors, max_samples):
     """
-    Generate a t-SNE plot of Mouse (MP_) and Human (HP_) phenotype embeddings.
+    Generate a UMAP plot of Mouse (MP_) and Human (HP_) phenotype embeddings.
     """
     random_seed = 0
     # Load the graph structure
@@ -198,10 +198,10 @@ def main(graph, fold, edges_file, perplexity, max_samples):
 
     print(f"Embeddings shape: {embeddings.shape}")
 
-    # Apply t-SNE
-    print("Applying t-SNE...")
-    tsne = TSNE(n_components=2, random_state=random_seed, perplexity=min(perplexity, len(selected_entities) - 1))
-    embeddings_2d = tsne.fit_transform(embeddings)
+    # Apply UMAP
+    print("Applying UMAP...")
+    reducer = umap.UMAP(n_components=2, random_state=random_seed, n_neighbors=min(n_neighbors, len(selected_entities) - 1))
+    embeddings_2d = reducer.fit_transform(embeddings)
 
     # Create plot
     print("Creating plot...")
@@ -216,15 +216,15 @@ def main(graph, fold, edges_file, perplexity, max_samples):
     plt.scatter(embeddings_2d[mp_count:, 0], embeddings_2d[mp_count:, 1],
                 c='red', label='Human Phenotypes (HP_)', alpha=0.6, s=20)
 
-    plt.title('t-SNE Visualization of Mouse and Human Phenotype Embeddings', fontsize=14)
-    plt.xlabel('t-SNE Dimension 1', fontsize=12)
-    plt.ylabel('t-SNE Dimension 2', fontsize=12)
+    plt.title('UMAP Visualization of Mouse and Human Phenotype Embeddings', fontsize=14)
+    plt.xlabel('UMAP Dimension 1', fontsize=12)
+    plt.ylabel('UMAP Dimension 2', fontsize=12)
     plt.legend(fontsize=11)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
 
     # Save plot
-    output = f"tsne/transd_{graph}_{fold}"
+    output = f"umap/transd_{graph}_{fold}"
     plt.savefig(output, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output}")
 
