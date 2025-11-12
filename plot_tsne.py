@@ -3,25 +3,25 @@ mowl.init_jvm("10g")
 
 from mowl.projection import OWL2VecStarProjector, Edge
 from pykeen.models import TransD
+import pandas as pd
 import torch as th
 import click as ck
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 import numpy as np
+from data import create_train_val_split
 
 @ck.command()
-@ck.option("--model_path", type=str, required=True, help="Path to the trained model file")
+@ck.option("--graph", type=ck.Choice(["graph1", "graph2", "graph3", "graph4"]), required=True)
+@ck.option("--fold", type=str, required=True, help="Path to the trained model file")
 @ck.option("--edges_file", type=str, default="data/upheno_owl2vecstar_edges.tsv", help="Path to edges file")
-@ck.option("--output", type=str, default="tsne_plot.png", help="Output file for the plot")
-@ck.option("--embedding_dim", type=int, default=100, help="Embedding dimension")
-@ck.option("--random_seed", type=int, default=0, help="Random seed for t-SNE")
 @ck.option("--perplexity", type=int, default=30, help="Perplexity parameter for t-SNE")
-@ck.option("--max_samples", type=int, default=1000, help="Maximum number of samples per phenotype type")
-def main(model_path, edges_file, output, embedding_dim, random_seed, perplexity, max_samples):
+@ck.option("--max_samples", type=int, default=10000, help="Maximum number of samples per phenotype type")
+def main(graph, fold, edges_file, perplexity, max_samples):
     """
     Generate a t-SNE plot of Mouse (MP_) and Human (HP_) phenotype embeddings.
     """
-
+    random_seed = 0
     # Load the graph structure
     print("Loading graph structure...")
     triples = []
@@ -36,6 +36,98 @@ def main(model_path, edges_file, output, embedding_dim, random_seed, perplexity,
             entities.add(dst)
             relations.add(rel)
 
+    graph1 = False
+    graph2 = False
+    graph3 = False
+    graph4 = False
+    
+    if graph == "graph4":
+        graph4 = True
+        graph3 = True
+        graph2 = True
+        graph1 = True
+    if graph == "graph3":
+        graph3 = True
+        graph2 = True
+        graph1 = True
+
+
+    if graph == "graph2":
+        graph2 = True
+        graph1 = True
+
+    if graph == "graph1":
+        graph1 = True
+
+
+    train_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/train.csv")
+
+    # Split into train and validation ensuring all validation entities are in training
+    train_disease_genes, val_disease_genes = create_train_val_split(train_disease_genes, val_ratio=0.1, random_seed=0)
+
+    train_diseases = sorted(list(set(train_disease_genes['Disease'].values)))
+    val_diseases = sorted(list(set(val_disease_genes['Disease'].values)))
+
+    non_test_diseases = set(train_diseases) | set(val_diseases)
+
+    test_disease_genes = pd.read_csv(f"data/gene_disease_folds/fold_{fold}/test.csv")
+    test_diseases = set(test_disease_genes['Disease'].values)
+
+
+    triples = []
+    entities = set()
+    relations = set()
+    with open(edges_file, "r") as f:
+        for line in f:
+            src, rel, dst = line.strip().split("\t")
+            triples.append((src, rel, dst))
+            entities.add(src)
+            entities.add(dst)
+            relations.add(rel)
+            
+    gene_phenotypes = pd.read_csv("data/gene_phenotypes.csv")
+    disease_phenotypes = pd.read_csv("data/disease_phenotypes.csv")
+    
+    if graph2:
+        for _, row in gene_phenotypes.iterrows():
+            gene = row['Gene']
+            phenotype = row['Phenotype']
+            assert phenotype in entities, f"Phenotype {phenotype} not in entities"
+            triples.append((gene, 'has_phenotype', phenotype))
+            entities.add(gene)
+
+    if graph3:
+        for _, row in disease_phenotypes.iterrows():
+            disease = row['Disease']
+            phenotype = row['Phenotype']
+            assert phenotype in entities, f"Phenotype {phenotype} not in entities"
+            if disease in test_diseases:
+                    continue
+            triples.append((disease, 'has_symptom', phenotype))
+            entities.add(disease)
+
+
+    assert len(test_diseases & non_test_diseases) == 0, "Test diseases overlap with train diseases"
+
+    assert len(test_diseases & entities) == 0, "Test diseases overlap with graph diseases"
+            
+            
+
+    
+    if graph4:
+        for _, row in train_disease_genes.iterrows():
+            disease = row['Disease']
+            gene = row['Gene']
+            triples.append((gene, 'associated_with', disease))
+            assert gene in entities, f"Gene {gene} not in entities"
+            assert disease in entities, f"Disease {disease} not in entities"
+            
+
+    entities = sorted(list(entities))
+    relations = sorted(list(relations))
+
+
+            
     entities = sorted(list(entities))
     relations = sorted(list(relations))
     triples = sorted(triples)
@@ -46,16 +138,27 @@ def main(model_path, edges_file, output, embedding_dim, random_seed, perplexity,
 
     # Initialize model
     print("Initializing TransD model...")
+
+    lr = 0.001
+    dim = 400
+    if graph in ["graph1", "graph3", "graph4"]:
+        bs = 8192
+        
+    elif graph == "graph2":
+        bs = 4096
+        
+        
     model = TransD(
         triples_factory=triples_factory,
-        embedding_dim=embedding_dim,
-        relation_dim=embedding_dim,
-        random_seed=random_seed
+        embedding_dim=dim,
+        relation_dim=dim,
+        random_seed=random_seed,
     )
 
+    model_path = f"data/models/transd_inductive_fold_{fold}_seed_0_dim_{dim}_bs_{bs}_lr_{lr}_{graph}.pt"
     # Load trained weights
     print(f"Loading model from {model_path}...")
-    model.load_state_dict(th.load(model_path, weights_only=True))
+    model.load_state_dict(th.load(model_path, weights_only=True, map_location=th.device('cpu')))
     model.eval()
 
     # Extract entity embeddings
@@ -121,6 +224,7 @@ def main(model_path, edges_file, output, embedding_dim, random_seed, perplexity,
     plt.tight_layout()
 
     # Save plot
+    output = f"tsne/transd_{graph}_{fold}"
     plt.savefig(output, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output}")
 
