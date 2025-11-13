@@ -26,10 +26,15 @@ handler = logging.StreamHandler()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
-def model_resolver(triples_factory, embedding_dim, random_seed, fold, graph, pretrained_model, hidden_dropout_rate=0.0, num_filters=400):
+def model_resolver(triples_factory, embedding_dim, random_seed, fold, graph, mode, pretrained_model, hidden_dropout_rate=0.0, num_filters=400):
 
     if pretrained_model =="transe":
-        pretrained_model_file = f"transe_transductive_fold_{fold}_seed_0_dim_100_bs_2048_lr_0.001_norm_2_{graph}"
+        dim = 100
+        if graph == "graph3":
+            bs = 8192
+        elif graph == "graph4":
+            bs = 2048
+        pretrained_model_file = f"transe_transductive_fold_{fold}_seed_0_dim_100_bs_{bs}_lr_0.001_norm_2_{graph}"
         pretrained_model = TransE(
             triples_factory=triples_factory, 
             embedding_dim=100, 
@@ -37,12 +42,29 @@ def model_resolver(triples_factory, embedding_dim, random_seed, fold, graph, pre
             scoring_fct_norm=2
         )
     elif pretrained_model == "transd":
-        pretrained_model_file = f"transd_transductive_fold_{fold}_seed_0_dim_100_bs_2048_lr_0.001_{graph}"
-
+        if mode == "transductive":
+            if graph == "graph3":
+                dim = 400
+            elif graph == "graph4":
+                dim = 100
+            pretrained_model_file = f"transd_transductive_fold_{fold}_seed_0_dim_{dim}_bs_2048_lr_0.001_{graph}"
+        elif mode == "inductive":
+            dim = 400
+            if graph == "graph1":
+                bs = 8192
+                lr = 0.001
+            elif graph == "graph2":
+                bs = 4096
+            elif graph == "graph3":
+                bs = 8192
+            elif graph == "graph4":
+                bs = 8192
+            pretrained_model_file = f"transd_inductive_fold_{fold}_seed_0_dim_{dim}_bs_{bs}_lr_0.001_{graph}"   
+            
         pretrained_model = TransD(
             triples_factory=triples_factory, 
-            embedding_dim=100,
-            relation_dim=100,
+            embedding_dim=dim,
+            relation_dim=dim,
             random_seed=0
     )
 
@@ -57,7 +79,7 @@ def model_resolver(triples_factory, embedding_dim, random_seed, fold, graph, pre
     
     model = ConvKB(
         triples_factory=triples_factory,
-        embedding_dim=embedding_dim,
+        embedding_dim=dim,
         random_seed=random_seed,
         hidden_dropout_rate=hidden_dropout_rate,
         num_filters=num_filters,
@@ -209,20 +231,14 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
     mowl_triples = [Edge(src, rel, dst) for src, rel, dst in triples]
     triples_factory = Edge.as_pykeen(mowl_triples)
 
-
-    if graph4:
-        graph = "graph4"
-    elif graph3:
-        graph = "graph3"
-    elif graph2:
-        graph = "graph2"
-    else:
-        graph = "graph1"
+    graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
+        
     model = model_resolver(triples_factory, embedding_dim,
-                           random_seed, fold, graph, pretrained_model, hidden_dropout_rate,
+                           random_seed, fold, graph_status, mode,
+                           pretrained_model, hidden_dropout_rate,
                            num_filters).to("cuda")
 
-    graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
+    
 
     file_identifier = f"convkb_{pretrained_model}_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_hdr_{hidden_dropout_rate}_nf_{num_filters}_{graph_status}"
     model_out_filename = f"data/models/{file_identifier}.pt"

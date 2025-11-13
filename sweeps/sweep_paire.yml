@@ -8,13 +8,13 @@ method: grid
 metric:
   goal: maximize
   name: tmac_mrr
-name: hpo_transductive_g4_paire
 parameters:
   batch_size:
     values:
-    - 512
     - 1024
     - 2048
+    - 4096
+    - 8192
   embedding_dim:
     values:
     - 100
@@ -28,11 +28,11 @@ parameters:
     values:
     - 0.001
     - 0.01
-    - 0.1
   mode:
     values:
     - transductive
-  num_epochs:
+  p:
     values:
-    - 200
+    - 1
+    - 2
 program: kge_paire.py

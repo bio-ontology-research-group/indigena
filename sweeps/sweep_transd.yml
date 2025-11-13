@@ -13,6 +13,9 @@ parameters:
   batch_size:
     values:
     - 1024
+    - 2048
+    - 4096
+    - 8192
   embedding_dim:
     values:
     - 100
@@ -26,16 +29,7 @@ parameters:
     values:
     - 0.001
     - 0.01
-    - 0.1
   mode:
     values:
     - transductive
-  num_epochs:
-    values:
-    - 200
-  relation_dim:
-    values:
-    - 50
-    - 100
-    - 150
 program: kge_transd.py
