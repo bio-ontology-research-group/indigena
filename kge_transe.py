@@ -58,18 +58,20 @@ def projector_resolver(projector_name):
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
+@ck.option("--criterion", type=ck.Choice(["bma", "bmm"]))
 def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
          batch_size, learning_rate, scoring_fct_norm, random_seed,
-         only_test, description, no_sweep):
+         only_test, description, no_sweep, criterion):
 
-    wandb.init(entity="ferzcam", project="indigena", name=description)                
+    wandb.init(entity="ferzcam", project="indigena", name=description)
     if no_sweep:
         wandb.log({"embedding_dim": embedding_dim,
                    "batch_size": batch_size,
                    "learning_rate": learning_rate,
                    "scoring_fct_norm": scoring_fct_norm,
                    "fold": fold,
-                   "mode": mode
+                   "mode": mode,
+                   "criterion": criterion
                    })
     else:
         embedding_dim = wandb.config.embedding_dim
@@ -78,6 +80,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         scoring_fct_norm = wandb.config.scoring_fct_norm
         fold = wandb.config.fold
         mode = wandb.config.mode
+        criterion = wandb.config.criterion
     
     seed_everything(random_seed)
     
@@ -176,7 +179,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
 
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
 
-    file_identifier = f"transe_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_norm_{scoring_fct_norm}_{graph_status}"
+    file_identifier = f"transe_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_norm_{scoring_fct_norm}_{graph_status}_{criterion}"
     model_out_filename = f"data/models/{file_identifier}.pt"
 
     # Build gene2pheno and disease2pheno mappings (needed for validation and testing)
@@ -215,6 +218,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         graph4,
         tolerance,
         model_out_filename,
+        criterion
     )
 
     validation_callback = StopperTrainingCallback(stopper=validation_stopper, triples_factory=triples_factory, best_epoch_model_file_path=model_out_filename)
@@ -257,7 +261,8 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
          graph3=graph3,
          graph4=graph4,
          output_file_prefix=output_prefix,
-         verbose=True
+         verbose=True,
+         criterion=criterion
     )
 
     # Log test metrics to wandb
