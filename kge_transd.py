@@ -68,7 +68,8 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
                    "batch_size": batch_size,
                    "learning_rate": learning_rate,
                    "fold": fold,
-                   "mode": mode
+                   "mode": mode,
+                   "criterion": criterion
                    })
     else:
         embedding_dim = wandb.config.embedding_dim
@@ -76,6 +77,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
         learning_rate = wandb.config.learning_rate
         fold = wandb.config.fold
         mode = wandb.config.mode
+        criterion = wandb.config.criterion
     
     seed_everything(random_seed)
     
