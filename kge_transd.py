@@ -139,9 +139,12 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
             if mode == "inductive":
                 if disease in test_diseases:
                     continue
-            triples.append((disease, 'has_symptom', phenotype))
-            entities.add(disease)
-
+            
+            if disease in train_diseases:
+                triples.append((disease, 'has_symptom', phenotype))
+                entities.add(disease)
+                
+    print(f"Graph3 total disease-phenotype edges: {total_graph3_count}, in train: {graph3_count_in_train}")
 
     assert len(test_diseases & non_test_diseases) == 0, "Test diseases overlap with train diseases"
 
