@@ -202,9 +202,8 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
                 if disease in test_diseases:
                     continue
 
-            if disease in train_diseases:
-                triples.append((disease, 'has_symptom', phenotype))
-                entities.add(disease)
+            triples.append((disease, 'has_symptom', phenotype))
+            entities.add(disease)
 
 
     assert len(test_diseases & non_test_diseases) == 0, "Test diseases overlap with train diseases"
