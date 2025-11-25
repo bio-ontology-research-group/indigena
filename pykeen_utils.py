@@ -23,6 +23,7 @@ class ValidationStopper(Stopper):
                  graph4,
                  tolerance,
                  model_out_filename,
+                 criterion,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -40,7 +41,8 @@ class ValidationStopper(Stopper):
         self.curr_tolerance = tolerance
         self.model_out_filename = model_out_filename
         self.best_val_mr = float('inf')
-
+        self.criterion = criterion
+        
     def get_summary_dict(self, *args, **kwargs):
         return dict()
 
@@ -68,7 +70,8 @@ class ValidationStopper(Stopper):
                 mode=self.mode,
                 graph3=self.graph3,
                 graph4=self.graph4,
-                output_file_prefix=val_output_prefix
+                 output_file_prefix=val_output_prefix,
+                 criterion=self.criterion
             )
 
             # Choose validation metric based on graph mode

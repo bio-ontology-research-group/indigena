@@ -10,7 +10,7 @@ logger.setLevel(logging.INFO)
 
 
 def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_genes,
-                   triples_factory, mode, graph3, graph4, output_file_prefix=None, verbose=False):
+                   triples_factory, mode, graph3, graph4, output_file_prefix=None, verbose=False, criterion="bma"):
     """
     Evaluate the model on a given test set.
 
@@ -85,7 +85,7 @@ def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_ge
             pheno_ids = [entity_to_id[p] for p in disease_phenos]
 
             disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
-            inductive_scores = compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts)
+            inductive_scores = compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts, criterion=criterion)
             assert inductive_scores.shape == (len(eval_genes),), f"Scores shape {inductive_scores.shape} does not match number of genes {len(eval_genes)}"
             inductive_scores = inductive_scores.tolist()
 
@@ -186,31 +186,38 @@ def compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_phe
 
     sim_matrix = sim_matrix.view(num_genes, max_phenos, num_disease_phenos)
 
+    
+    # Gene-centric scores
+    logger.debug(f"Sim matrix shape: {sim_matrix.shape}")
+    gene_max_sim, _ = sim_matrix.max(dim=-1)
+    logger.debug(f"Gene max sim shape: {gene_max_sim.shape}")
+    gene_centric_sum = gene_max_sim.sum(dim=-1)
+    logger.debug(f"Gene centric sum shape: {gene_centric_sum.shape}")
+    # For genes with 0 phenotypes, gene_pheno_counts is 0, this will result in NaN. Avoid division by zero.
+    # We replace 0 counts with 1 to avoid division by zero. The sum is 0 so the score will be 0.
+    gene_pheno_counts_safe = th.max(gene_pheno_counts, th.tensor(1.0))
+    logger.debug(f"Gene pheno counts shape: {gene_pheno_counts_safe.shape}")
+    gene_centric_scores = gene_centric_sum / gene_pheno_counts_safe
+    logger.debug(f"Gene centric scores shape: {gene_centric_scores.shape}")
+
+    assert th.all(gene_centric_scores >= 0) and th.all(gene_centric_scores <= 1), "Gene centric scores out of range [0, 1]"
+
+    # Disease-centric scores
+    disease_max_sim, _ = sim_matrix.max(dim=1)
+    disease_centric_scores = disease_max_sim.mean(dim=-1)
+    # disease_centric_scores = disease_centric_sum / num_disease_phenos
+
+    assert th.all(disease_centric_scores >= 0) and th.all(disease_centric_scores <= 1), "Disease centric scores out of range [0, 1]"
+    assert gene_centric_scores.shape == disease_centric_scores.shape == (num_genes,), f"Scores shape mismatch: {gene_centric_scores.shape}, {disease_centric_scores.shape}, expected {(num_genes,)}"
     if criterion == "bma":
-        # Gene-centric scores
-        logger.debug(f"Sim matrix shape: {sim_matrix.shape}")
-        gene_max_sim, _ = sim_matrix.max(dim=-1)
-        logger.debug(f"Gene max sim shape: {gene_max_sim.shape}")
-        gene_centric_sum = gene_max_sim.sum(dim=-1)
-        logger.debug(f"Gene centric sum shape: {gene_centric_sum.shape}")
-        # For genes with 0 phenotypes, gene_pheno_counts is 0, this will result in NaN. Avoid division by zero.
-        # We replace 0 counts with 1 to avoid division by zero. The sum is 0 so the score will be 0.
-        gene_pheno_counts_safe = th.max(gene_pheno_counts, th.tensor(1.0))
-        logger.debug(f"Gene pheno counts shape: {gene_pheno_counts_safe.shape}")
-        gene_centric_scores = gene_centric_sum / gene_pheno_counts_safe
-        logger.debug(f"Gene centric scores shape: {gene_centric_scores.shape}")
-
-        assert th.all(gene_centric_scores >= 0) and th.all(gene_centric_scores <= 1), "Gene centric scores out of range [0, 1]"
-
-        # Disease-centric scores
-        disease_max_sim, _ = sim_matrix.max(dim=1)
-        disease_centric_scores = disease_max_sim.mean(dim=-1)
-        # disease_centric_scores = disease_centric_sum / num_disease_phenos
-
-        assert th.all(disease_centric_scores >= 0) and th.all(disease_centric_scores <= 1), "Disease centric scores out of range [0, 1]"
-        assert gene_centric_scores.shape == disease_centric_scores.shape == (num_genes,), f"Scores shape mismatch: {gene_centric_scores.shape}, {disease_centric_scores.shape}, expected {(num_genes,)}"
-
         scores = (gene_centric_scores + disease_centric_scores) / 2
-        return scores
+    elif criterion == "bmm":
+        scores = th.max(gene_centric_scores, disease_centric_scores)
+
     else:
         raise NotImplementedError(f"Criterion {criterion} not implemented.")
+
+    return scores
+    
+                                                                                        
+    

@@ -57,9 +57,10 @@ def projector_resolver(projector_name):
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
+@ck.option("--criterion", type=ck.Choice(["bma", "bmm"]))
 def main(fold, graph2, graph3, graph4, projector_name, mode,
          embedding_dim, batch_size, learning_rate,
-         random_seed, only_test, description, no_sweep):
+         random_seed, only_test, description, no_sweep, criterion):
 
     wandb.init(entity="ferzcam", project="indigena", name=description)                
     if no_sweep:
@@ -211,6 +212,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
         graph4,
         tolerance,
         model_out_filename,
+        criterion
     )
 
     validation_callback = StopperTrainingCallback(stopper=validation_stopper, triples_factory=triples_factory, best_epoch_model_file_path=model_out_filename)
@@ -253,7 +255,8 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
          graph3=graph3,
          graph4=graph4,
          output_file_prefix=output_prefix,
-         verbose=True
+         verbose=True,
+         criterion=criterion
     )
 
     # Log test metrics to wandb
