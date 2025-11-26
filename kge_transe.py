@@ -15,6 +15,7 @@ import click as ck
 import pandas as pd
 import wandb
 
+
 from data import create_train_val_split
 from pykeen_utils import ValidationStopper
 from evaluation import evaluate_model
@@ -58,10 +59,9 @@ def projector_resolver(projector_name):
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
-@ck.option("--criterion", type=ck.Choice(["bma", "bmm"]))
 def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
          batch_size, learning_rate, scoring_fct_norm, random_seed,
-         only_test, description, no_sweep, criterion):
+         only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indigena", name=description)
     if no_sweep:
@@ -70,8 +70,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
                    "learning_rate": learning_rate,
                    "scoring_fct_norm": scoring_fct_norm,
                    "fold": fold,
-                   "mode": mode,
-                   "criterion": criterion
+                   "mode": mode
                    })
     else:
         embedding_dim = wandb.config.embedding_dim
@@ -80,8 +79,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         scoring_fct_norm = wandb.config.scoring_fct_norm
         fold = wandb.config.fold
         mode = wandb.config.mode
-        criterion = wandb.config.criterion
-    
+        
     seed_everything(random_seed)
     
     if graph4:
@@ -179,7 +177,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
 
     graph_status = "graph4" if graph4 else "graph3" if graph3 else "graph2" if graph2 else "graph1"
 
-    file_identifier = f"transe_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_norm_{scoring_fct_norm}_{graph_status}_{criterion}"
+    file_identifier = f"transe_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_norm_{scoring_fct_norm}_{graph_status}"
     model_out_filename = f"data/models/{file_identifier}.pt"
 
     # Build gene2pheno and disease2pheno mappings (needed for validation and testing)
@@ -217,8 +215,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
         graph3,
         graph4,
         tolerance,
-        model_out_filename,
-        criterion
+        model_out_filename
     )
 
     validation_callback = StopperTrainingCallback(stopper=validation_stopper, triples_factory=triples_factory, best_epoch_model_file_path=model_out_filename)
@@ -248,7 +245,8 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
     # Evaluate on test set
     output_prefix = f"data/results/kge_results_{file_identifier}"
 
-    (inductive_macro_metrics,
+    (inductive_bma_macro_metrics,
+     inductive_bmm_macro_metrics,
      transductive_sim_macro_metrics,
      transductive_function_macro_metrics) = evaluate_model(
          model=model,
@@ -261,14 +259,15 @@ def main(fold, graph2, graph3, graph4, projector_name, mode, embedding_dim,
          graph3=graph3,
          graph4=graph4,
          output_file_prefix=output_prefix,
-         verbose=True,
-         criterion=criterion
+         verbose=True
     )
 
     # Log test metrics to wandb
     metrics = ['mr', 'mrr', 'auc', 'hits@1', 'hits@3', 'hits@10', 'hits@100']
-    macro_to_log = {f"test_imac_{k}": v for k, v in inductive_macro_metrics.items() if k in metrics}
-    wandb.log(macro_to_log)
+    bma_macro_to_log = {f"test_imac_bma_{k}": v for k, v in inductive_bma_macro_metrics.items() if k in metrics}
+    bmm_macro_to_log = {f"test_imac_bmm_{k}": v for k, v in inductive_bmm_macro_metrics.items() if k in metrics}
+    wandb.log(bma_macro_to_log)
+    wandb.log(bmm_macro_to_log)
     
     if mode == "transductive":
         macro_sim_to_log = {f"test_sim_tmac_{k}": v for k, v in transductive_sim_macro_metrics.items() if k in metrics}

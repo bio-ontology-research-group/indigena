@@ -23,7 +23,6 @@ class ValidationStopper(Stopper):
                  graph4,
                  tolerance,
                  model_out_filename,
-                 criterion,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -41,7 +40,6 @@ class ValidationStopper(Stopper):
         self.curr_tolerance = tolerance
         self.model_out_filename = model_out_filename
         self.best_val_mr = float('inf')
-        self.criterion = criterion
         
     def get_summary_dict(self, *args, **kwargs):
         return dict()
@@ -58,7 +56,8 @@ class ValidationStopper(Stopper):
             self.model.eval()
             val_output_prefix = f"data/results/validation_{self.file_identifier}"
 
-            (val_inductive_macro_metrics,
+            (val_inductive_bma_macro_metrics,
+             val_inductive_bmm_macro_metrics,
              val_transductive_sim_macro_metrics,
              val_transductive_function_macro_metrics) = evaluate_model(
                 model=self.model,
@@ -70,8 +69,8 @@ class ValidationStopper(Stopper):
                 mode=self.mode,
                 graph3=self.graph3,
                 graph4=self.graph4,
-                 output_file_prefix=val_output_prefix,
-                 criterion=self.criterion
+                output_file_prefix=val_output_prefix,
+                 
             )
 
             # Choose validation metric based on graph mode
@@ -83,7 +82,7 @@ class ValidationStopper(Stopper):
                 val_mr = val_transductive_sim_macro_metrics['mr']
                 metric_type = "transductive_similarity"
             else:
-                val_mr = val_inductive_macro_metrics['mr']
+                val_mr = val_inductive_bma_macro_metrics['mr']
                 metric_type = "inductive"
 
             if val_mr < self.best_val_mr:

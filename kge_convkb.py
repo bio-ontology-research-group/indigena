@@ -26,7 +26,7 @@ handler = logging.StreamHandler()
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
-def model_resolver(triples_factory, embedding_dim, random_seed, fold, graph, mode, pretrained_model, hidden_dropout_rate=0.0, num_filters=400, criterion="bma"):
+def model_resolver(triples_factory, embedding_dim, random_seed, fold, graph, mode, pretrained_model, hidden_dropout_rate=0.0, num_filters=400):
 
     if pretrained_model =="transe":
         dim = 100
@@ -34,10 +34,10 @@ def model_resolver(triples_factory, embedding_dim, random_seed, fold, graph, mod
             bs = 8192
         elif graph == "graph4":
             bs = 2048
-        pretrained_model_file = f"transe_transductive_fold_{fold}_seed_0_dim_100_bs_{bs}_lr_0.001_norm_2_{graph}_{criterion}"
+        pretrained_model_file = f"transe_transductive_fold_{fold}_seed_0_dim_100_bs_{bs}_lr_0.001_norm_2_{graph}"
         pretrained_model = TransE(
-            triples_factory=triples_factory, 
-            embedding_dim=100, 
+            triples_factory=triples_factory,
+            embedding_dim=100,
             random_seed=0,
             scoring_fct_norm=2
         )
@@ -47,7 +47,7 @@ def model_resolver(triples_factory, embedding_dim, random_seed, fold, graph, mod
                 dim = 400
             elif graph == "graph4":
                 dim = 100
-            pretrained_model_file = f"transd_transductive_fold_{fold}_seed_0_dim_{dim}_bs_2048_lr_0.001_{graph}_{criterion}"
+            pretrained_model_file = f"transd_transductive_fold_{fold}_seed_0_dim_{dim}_bs_2048_lr_0.001_{graph}"
         elif mode == "inductive":
             dim = 400
             if graph == "graph1":
@@ -59,7 +59,7 @@ def model_resolver(triples_factory, embedding_dim, random_seed, fold, graph, mod
                 bs = 8192
             elif graph == "graph4":
                 bs = 8192
-            pretrained_model_file = f"transd_inductive_fold_{fold}_seed_0_dim_{dim}_bs_{bs}_lr_0.001_{graph}_{criterion}"   
+            pretrained_model_file = f"transd_inductive_fold_{fold}_seed_0_dim_{dim}_bs_{bs}_lr_0.001_{graph}"   
             
         pretrained_model = TransD(
             triples_factory=triples_factory, 
@@ -114,11 +114,10 @@ def projector_resolver(projector_name):
 @ck.option("--only_test", "-ot", is_flag=True, help="Only test the model")
 @ck.option("--description", type=str, default="", help="Description for the wandb run")
 @ck.option("--no_sweep", is_flag=True, help="Disable wandb sweep mode")
-@ck.option("--criterion", type=ck.Choice(["bma", "bmm"]))
 def main(fold, graph2, graph3, graph4, projector_name, mode,
          embedding_dim, batch_size, learning_rate,
          hidden_dropout_rate, num_filters, pretrained_model,
-         random_seed, only_test, description, no_sweep, criterion):
+         random_seed, only_test, description, no_sweep):
 
     wandb.init(entity="ferzcam", project="indigena", name=description)
     if no_sweep:
@@ -128,8 +127,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
                    "num_filters": num_filters,
                    "fold": fold,
                    "mode": mode,
-                   "pretrained_model": pretrained_model,
-                   "criterion": criterion
+                   "pretrained_model": pretrained_model
                    })
     else:
         embedding_dim = wandb.config.embedding_dim
@@ -139,7 +137,6 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
         fold = wandb.config.fold
         mode = wandb.config.mode
         pretrained_model = wandb.config.pretrained_model
-        criterion = wandb.config.criterion
 
     seed_everything(random_seed)
 
@@ -240,11 +237,11 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
     model = model_resolver(triples_factory, embedding_dim,
                            random_seed, fold, graph_status, mode,
                            pretrained_model, hidden_dropout_rate,
-                           num_filters, criterion).to("cuda")
+                           num_filters).to("cuda")
 
 
 
-    file_identifier = f"convkb_{pretrained_model}_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_hdr_{hidden_dropout_rate}_nf_{num_filters}_{graph_status}_{criterion}"
+    file_identifier = f"convkb_{pretrained_model}_{mode}_fold_{fold}_seed_{random_seed}_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_hdr_{hidden_dropout_rate}_nf_{num_filters}_{graph_status}"
     model_out_filename = f"data/models/{file_identifier}.pt"
 
     # Build gene2pheno and disease2pheno mappings (needed for validation and testing)
@@ -282,8 +279,7 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
         graph3,
         graph4,
         tolerance,
-        model_out_filename,
-        criterion
+        model_out_filename
     )
 
     validation_callback = StopperTrainingCallback(stopper=validation_stopper, triples_factory=triples_factory, best_epoch_model_file_path=model_out_filename)
@@ -313,7 +309,8 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
     # Evaluate on test set
     output_prefix = f"data/results/kge_results_{file_identifier}"
 
-    (inductive_macro_metrics,
+    (inductive_bma_macro_metrics,
+     inductive_bmm_macro_metrics,
      transductive_sim_macro_metrics,
      transductive_function_macro_metrics) = evaluate_model(
          model=model,
@@ -326,14 +323,15 @@ def main(fold, graph2, graph3, graph4, projector_name, mode,
          graph3=graph3,
          graph4=graph4,
          output_file_prefix=output_prefix,
-         verbose=True,
-         criterion=criterion
+         verbose=True
     )
 
     # Log test metrics to wandb
     metrics = ['mr', 'mrr', 'auc', 'hits@1', 'hits@3', 'hits@10', 'hits@100']
-    macro_to_log = {f"test_imac_{k}": v for k, v in inductive_macro_metrics.items() if k in metrics}
-    wandb.log(macro_to_log)
+    bma_macro_to_log = {f"test_imac_bma_{k}": v for k, v in inductive_bma_macro_metrics.items() if k in metrics}
+    bmm_macro_to_log = {f"test_imac_bmm_{k}": v for k, v in inductive_bmm_macro_metrics.items() if k in metrics}
+    wandb.log(bma_macro_to_log)
+    wandb.log(bmm_macro_to_log)
 
     if mode == "transductive":
         macro_sim_to_log = {f"test_sim_tmac_{k}": v for k, v in transductive_sim_macro_metrics.items() if k in metrics}

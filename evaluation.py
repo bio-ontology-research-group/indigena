@@ -10,7 +10,7 @@ logger.setLevel(logging.INFO)
 
 
 def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_genes,
-                   triples_factory, mode, graph3, graph4, output_file_prefix=None, verbose=False, criterion="bma"):
+                   triples_factory, mode, graph3, graph4, output_file_prefix=None, verbose=False):
     """
     Evaluate the model on a given test set.
 
@@ -74,7 +74,8 @@ def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_ge
     logger.debug(f"Number of test pairs: {len(test_pairs)}")
     logger.debug(f"Example test pair: {test_pairs[0]}")
 
-    inductive_results = []
+    inductive_bma_results = []
+    inductive_bmm_results = []
     transductive_function_results = []
     transductive_sim_results = []
     
@@ -85,11 +86,16 @@ def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_ge
             pheno_ids = [entity_to_id[p] for p in disease_phenos]
 
             disease_phenos_vectors = entity_embeddings[th.tensor(pheno_ids)]
-            inductive_scores = compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts, criterion=criterion)
-            assert inductive_scores.shape == (len(eval_genes),), f"Scores shape {inductive_scores.shape} does not match number of genes {len(eval_genes)}"
-            inductive_scores = inductive_scores.tolist()
+            inductive_bma_scores = compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts, criterion="bma")
+            inductive_bmm_scores = compare_vectorized(all_genes_pheno_vectors, disease_phenos_vectors, gene_pheno_counts, criterion="bmm")
+            
+            assert inductive_bma_scores.shape == (len(eval_genes),), f"Scores shape {inductive_bma_scores.shape} does not match number of genes {len(eval_genes)}"
+            assert inductive_bmm_scores.shape == (len(eval_genes),), f"Scores shape {inductive_bmm_scores.shape} does not match number of genes {len(eval_genes)}"
+            inductive_bma_scores = inductive_bma_scores.tolist()
+            inductive_bmm_scores = inductive_bmm_scores.tolist()
 
-            inductive_results.append((test_gene, test_disease, gene_to_index[test_gene], inductive_scores))
+            inductive_bma_results.append((test_gene, test_disease, gene_to_index[test_gene], inductive_bma_scores))
+            inductive_bmm_results.append((test_gene, test_disease, gene_to_index[test_gene], inductive_bmm_scores))
 
             if mode == "transductive":
                 gene_ids = th.tensor([entity_to_id[gene] for gene in eval_genes])
@@ -115,21 +121,31 @@ def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_ge
             pbar.update()
 
     # Compute metrics
-    inductive_macro_metrics = None
+    inductive_bma_macro_metrics = None
+    inductive_bmm_macro_metrics = None
     transductive_sim_macro_metrics = None
     transductive_function_macro_metrics = None
     
     if output_file_prefix:
-        inductive_results_out_file = f"{output_file_prefix}_inductive.tsv"
-        with open(inductive_results_out_file, "w") as f:
-            for gene, disease, gene_index, scores in inductive_results:
+        inductive_bma_results_out_file = f"{output_file_prefix}_inductive_bma.tsv"
+        inductive_bmm_results_out_file = f"{output_file_prefix}_inductive_bmm.tsv"
+        with open(inductive_bma_results_out_file, "w") as f:
+            for gene, disease, gene_index, scores in inductive_bma_results:
                 scores_str = "\t".join([str(score) for score in scores])
                 f.write(f"{gene}\t{disease}\t{gene_index}\t{scores_str}\n")
-
-        inductive_micro_metrics, inductive_macro_metrics = compute_metrics(inductive_results_out_file, verbose=verbose)
+        with open(inductive_bmm_results_out_file, "w") as f:
+            for gene, disease, gene_index, scores in inductive_bmm_results:
+                scores_str = "\t".join([str(score) for score in scores])
+                f.write(f"{gene}\t{disease}\t{gene_index}\t{scores_str}\n")
+                
+        _, inductive_bma_macro_metrics = compute_metrics(inductive_bma_results_out_file, verbose=verbose)
+        _, inductive_bmm_macro_metrics = compute_metrics(inductive_bmm_results_out_file, verbose=verbose)
+        
         if verbose:
-            print(f"Inductive results saved to {inductive_results_out_file}")
-            print_as_tex(inductive_macro_metrics, "Inductive")
+            print(f"Inductive results saved to {inductive_bma_results_out_file}")
+            print(f"Inductive results saved to {inductive_bmm_results_out_file}")
+            print_as_tex(inductive_bma_macro_metrics, "Inductive BMA")
+            print_as_tex(inductive_bmm_macro_metrics, "Inductive BMM")
 
         if mode == "transductive":
             transductive_results_sim_out_file = f"{output_file_prefix}_transductive_sim.tsv"
@@ -155,7 +171,8 @@ def evaluate_model(model, test_disease_genes, gene2pheno, disease2pheno, eval_ge
                     print_as_tex(transductive_function_macro_metrics, "Transductive Function")
                 
                         
-    return (inductive_macro_metrics,
+    return (inductive_bma_macro_metrics,
+            inductive_bmm_macro_metrics,
             transductive_sim_macro_metrics,
             transductive_function_macro_metrics)
 
