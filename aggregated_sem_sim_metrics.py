@@ -11,7 +11,7 @@ def print_as_tex(stats):
 
 @ck.command()
 @ck.option('--root_dir', default='data/baseline_results', help='Root directory containing result files.')
-@ck.option('--pairwise_measure', '-pw', type=ck.Choice(['resnik', 'lin']), default='resnik', help='Pairwise semantic similarity measure.')
+@ck.option('--pairwise_measure', '-pw', type=ck.Choice(['resnik', 'lin']), default='lin', help='Pairwise semantic similarity measure.')
 @ck.option('--groupwise_measure', '-gw', type=ck.Choice(['bma', 'bmm', 'simgic']), default='bma', help='Groupwise semantic similarity measure.')
 def main(root_dir, pairwise_measure, groupwise_measure):
     
@@ -25,8 +25,10 @@ def main(root_dir, pairwise_measure, groupwise_measure):
     for fold in range(10):
         input_file = f"{root_dir}/resnik_{pairwise_measure}_{groupwise_measure}_fold{fold}_results.txt"
         input_file = input_file.replace("__", "_")
-        _, macro_metrics = compute_metrics(input_file)
+        _, macro_metrics = compute_metrics(input_file, output_ranks=True)
         for metric in metrics_to_extract:
+            if "auc" in metric:
+                print(f"Fold {fold} - AUC: {macro_metrics[metric]:.4f}")
             if metric not in metrics_summary:
                 metrics_summary[metric] = []
             metrics_summary[metric].append(macro_metrics[metric])
