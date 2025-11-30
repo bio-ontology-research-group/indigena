@@ -35,14 +35,20 @@ def print_as_tex(metrics, title):
         
                                         
     
-def compute_metrics(filename, verbose=False):
+def compute_metrics(filename, verbose=False, output_ranks=False):
     with open(filename, "r") as f:
         results = f.readlines()
         results = [x.strip().split("\t") for x in results]
 
+        
+        
     if verbose:
         print(f"Number of results: {len(results)}")
 
+    if output_ranks:
+        ranks_output_file = filename.split(".")[0] + "_ranks.txt"
+        ranks_f = open(ranks_output_file, "w")
+        
     mr = 0
     mrr = 0
     hits_k = {1: 0, 3: 0, 10: 0, 100: 0}
@@ -74,7 +80,9 @@ def compute_metrics(filename, verbose=False):
 
         order = th.argsort(scores, descending=False)
         rank = th.where(order == updated_position)[0].item() + 1
-
+        if output_ranks:
+            ranks_f.write(f"{disease}\t{rank}\n")
+        
         # ordering = rankdata(scores, method='average')
         # rank = ordering[int(position)]
 
