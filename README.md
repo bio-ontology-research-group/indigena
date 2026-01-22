@@ -84,14 +84,14 @@ username.
 
 ### Run basic KGE model:
 ```bash
-python kge_transe.py --fold 0 --model_name transd --mode inductive --graph2 --no_sweep
+python kge_transe.py --fold 0 --mode inductive --graph2 --no_sweep
 ```
 
 ### Run with hyperparameters:
 ```bash
-python kge_transd.py --fold 0 --model_name transd --mode inductive \
+python kge_transd.py --fold 0 --mode inductive \
   --embedding_dim 100 --batch_size 128 --learning_rate 0.001 \
-  --graph2 
+  --graph2 --no_sweep
 ```
 
 ### Parameters:
