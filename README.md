@@ -134,15 +134,39 @@ python kge_transd.py --fold 0 --mode inductive \
   --graph4 --no_sweep
 ```
 
-The full hyperparameter sweep configurations live in `sweeps/` and
-can be launched via:
+The hyperparameters used for each model and graph configuration are:
 
-```bash
-bash run_sweep.sh
-```
+<details>
+<summary>Hyperparameter table</summary>
 
-The exact hyperparameters selected per model are listed in
-Supplementary Table 1 of the paper.
+| Model | Embedding dim | Batch size | Learning rate | Num filters |
+|-------|---------------|------------|---------------|-------------|
+| **Transductive G3** | | | | |
+| TransE | 100 | 8192 | 0.001 | – |
+| TransH | 200 | 2048 | 0.001 | – |
+| TransD | 400 | 2048 | 0.001 | – |
+| ConvKB | 100 | 8192 | 0.0001 | 100 |
+| ConvKB-D | 100 | 8192 | 0.0001 | 100 |
+| **Transductive G4** | | | | |
+| TransE | 100 | 2048 | 0.001 | – |
+| TransH | 200 | 1024 | 0.001 | – |
+| TransD | 100 | 2048 | 0.001 | – |
+| ConvKB | 100 | 8192 | 0.0001 | 100 |
+| ConvKB-D | 100 | 8192 | 0.00001 | 200 |
+| **Inductive G1** | | | | |
+| TransD | 400 | 8192 | 0.001 | – |
+| ConvKB-D | 100 | 8192 | 0.0001 | 100 |
+| **Inductive G2** | | | | |
+| TransD | 400 | 4096 | 0.001 | – |
+| ConvKB-D | 100 | 4096 | 0.0001 | 100 |
+| **Inductive G3** | | | | |
+| TransD | 400 | 8192 | 0.001 | – |
+| ConvKB-D | 100 | 8192 | 0.0001 | 100 |
+| **Inductive G4** | | | | |
+| TransD | 400 | 8192 | 0.001 | – |
+| ConvKB-D | 100 | 2048 | 0.0001 | 200 |
+
+</details>
 
 Common KGE-script parameters:
 
