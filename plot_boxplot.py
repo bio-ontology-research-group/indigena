@@ -40,14 +40,14 @@ def get_lin_bma_fold_values(root_dir="data/baseline_results"):
 
 
 def main():
-    # TransD inductive graph4
-    transd_metrics = [
+    # ConvKB-D inductive graph4
+    convkbd_metrics = [
         "test_imac_bma_mr", "test_imac_bma_mrr",
         "test_imac_bma_hits@1", "test_imac_bma_hits@3",
         "test_imac_bma_hits@10", "test_imac_bma_hits@100",
         "test_imac_bma_auc",
     ]
-    transd_values = get_fold_values("pesnxxig", transd_metrics)
+    convkbd_values = get_fold_values("sung7r49", convkbd_metrics)
 
     # Lin-BMA
     lin_bma_values = get_lin_bma_fold_values()
@@ -55,11 +55,11 @@ def main():
     # Map metric names for comparison
     metric_pairs = [
         ("mr", "test_imac_bma_mr", "Mean Rank"),
+        ("mrr", "test_imac_bma_mrr", "MRR"),
         ("hits@1", "test_imac_bma_hits@1", "Hits@1"),
         ("hits@3", "test_imac_bma_hits@3", "Hits@3"),
         ("hits@10", "test_imac_bma_hits@10", "Hits@10"),
         ("hits@100", "test_imac_bma_hits@100", "Hits@100"),
-        ("mrr", "test_imac_bma_mrr", "MRR"),
         ("auc", "test_imac_bma_auc", "AUC"),
     ]
 
@@ -69,10 +69,10 @@ def main():
     _, axes = plt.subplots(nrows, ncols, figsize=(16, 4 * nrows))
     axes = axes.flatten()
 
-    for i, (lin_key, transd_key, title) in enumerate(metric_pairs):
+    for i, (lin_key, convkbd_key, title) in enumerate(metric_pairs):
         ax = axes[i]
-        data = [lin_bma_values[lin_key], transd_values[transd_key]]
-        bp = ax.boxplot(data, labels=["Lin-BMA", "TransD"], patch_artist=True,
+        data = [lin_bma_values[lin_key], convkbd_values[convkbd_key]]
+        bp = ax.boxplot(data, labels=["Lin-BMA", "ConvKB-D"], patch_artist=True,
                         widths=0.5)
         bp["boxes"][0].set_facecolor("#4C72B0")
         bp["boxes"][1].set_facecolor("#DD8452")
@@ -83,11 +83,11 @@ def main():
     for j in range(n_metrics, len(axes)):
         axes[j].set_visible(False)
 
-    plt.suptitle("Lin-BMA vs TransD (Inductive, Graph 4)", fontsize=16, y=1.01)
+    plt.suptitle("Lin-BMA vs ConvKB-D (Inductive, Graph 4)", fontsize=16, y=1.01)
     plt.tight_layout()
-    plt.savefig("boxplot_lin_bma_vs_transd.png", dpi=300, bbox_inches="tight")
-    plt.savefig("boxplot_lin_bma_vs_transd.pdf", bbox_inches="tight")
-    print("Saved boxplot_lin_bma_vs_transd.png and .pdf")
+    plt.savefig("boxplot_lin_bma_vs_convkbd.png", dpi=300, bbox_inches="tight")
+    plt.savefig("boxplot_lin_bma_vs_convkbd.pdf", bbox_inches="tight")
+    print("Saved boxplot_lin_bma_vs_convkbd.png and .pdf")
 
 
 if __name__ == "__main__":

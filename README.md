@@ -187,6 +187,9 @@ Common KGE-script parameters:
 # Wilcoxon signed-rank test (Lin-BMA vs ConvKB-D / Graph 4)
 Rscript p_value.r            # or: python p_value.py
 
+# Box plot comparing Lin-BMA vs ConvKB-D (inductive, Graph 4)
+python plot_boxplot.py
+
 # UMAP projections of learned embeddings (Figure 2)
 bash plot_umap.sh
 python plot_umap_models_grid.py
@@ -223,6 +226,7 @@ kge_transh.py                    # TransH training / evaluation
 kge_transd.py                    # TransD training / evaluation
 kge_convkb.py                    # ConvKB / ConvKB-D training / evaluation
 extract_metrics_from_sweep.py    # parse W&B sweep results
+plot_boxplot.py                  # box plot comparing Lin-BMA vs ConvKB-D
 plot_umap.py / plot_umap_models_grid.py  # UMAP visualizations
 p_value.py / p_value.r           # Wilcoxon signed-rank test
 check_data_leakage.py            # sanity check that test diseases are unseen
