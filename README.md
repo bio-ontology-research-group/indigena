@@ -25,7 +25,7 @@ If you use this code, please cite:
 - [Installation](#installation)
 - [Data](#data)
 - [Reproducing the paper](#reproducing-the-paper)
-- [Running inference on a custom phenotype set](#running-inference-on-a-custom-phenotype-set)
+- [Running inference on a trained model](#running-inference-on-a-trained-model)
 - [Repository layout](#repository-layout)
 
 ## Dependencies
@@ -56,9 +56,9 @@ cd ..
 ```
 
 The KGE training scripts log to Weights & Biases. Before running any
-`kge_*.py` script, edit the `wandb.init(...)` call in `kge.py` and
-set `entity` to your W&B username (or set `WANDB_MODE=offline` if you
-do not want to use W&B).
+`kge_*.py` script, edit the `wandb.init(...)` call and set `entity`
+to your W&B username (or set `WANDB_MODE=offline` if you do not want
+to use W&B).
 
 ## Data
 
@@ -134,13 +134,6 @@ python kge_transd.py --fold 0 --mode inductive \
   --graph4 --no_sweep
 ```
 
-To launch all folds × all graphs for a given KGE model use the
-helper script:
-
-```bash
-bash run_by_graph.sh
-```
-
 The full hyperparameter sweep configurations live in `sweeps/` and
 can be launched via:
 
@@ -175,34 +168,22 @@ bash plot_umap.sh
 python plot_umap_models_grid.py
 ```
 
-## Running inference on a custom phenotype set
+## Running inference on a trained model
 
 Once a KGE model has been trained (e.g. TransD on Graph 4, fold 0)
-its checkpoint is stored under `data/models/`. The same scripts that
-are used for evaluation can be reused with `--only_test` to score a
-user-supplied set of phenotypes against all candidate genes:
+its checkpoint is stored under `data/models/`. You can skip training
+and run evaluation directly using `--only_test`, which loads the
+trained model and scores the gene–disease pairs in the fold's
+`test.csv` file (located under `data/gene_disease_folds/fold_<N>/`):
 
-1. Create a CSV file `my_disease.csv` with one HPO id per line, e.g.
-   ```
-   HP:0001250
-   HP:0001263
-   HP:0000252
-   ```
-2. Add an entry to `data/disease_phenotypes.csv` for your disease
-   (any unused OMIM-style id is fine), pointing at this phenotype
-   set.
-3. Run the inductive evaluation in test-only mode:
-   ```bash
-   python kge_transd.py --fold 0 --mode inductive --graph4 \
-     --no_sweep --only_test
-   ```
-4. The script writes a ranked list of candidate genes for each
-   disease in the test split (including your custom one) under
-   `data/results/`.
+```bash
+python kge_transd.py --fold 0 --mode inductive --graph4 \
+  --no_sweep --only_test
+```
 
-This is the same code path used to produce the numbers in Tables 1
-and 2 of the paper, so a custom phenotype set is treated exactly
-like an unseen test disease.
+Each `test.csv` contains `Gene,Disease` pairs that were held out
+during training. The script ranks candidate genes for each test
+disease and writes results under `data/results/`.
 
 ## Repository layout
 
@@ -213,11 +194,10 @@ semantic_similarity.groovy       # Resnik/Lin + BMA/BMM baselines (SLIB)
 semantic_similarity_simgic.*     # SimGIC baseline
 evaluate_sem_sim.py              # per-fold metric computation
 aggregated_sem_sim_metrics.py    # aggregate baseline metrics across folds
-kge.py                           # shared KGE training / evaluation code
-kge_transe.py                    # TransE entry point
-kge_transh.py                    # TransH entry point
-kge_transd.py                    # TransD entry point
-kge_convkb.py                    # ConvKB / ConvKB-D entry point
+kge_transe.py                    # TransE training / evaluation
+kge_transh.py                    # TransH training / evaluation
+kge_transd.py                    # TransD training / evaluation
+kge_convkb.py                    # ConvKB / ConvKB-D training / evaluation
 extract_metrics_from_sweep.py    # parse W&B sweep results
 plot_umap.py / plot_umap_models_grid.py  # UMAP visualizations
 p_value.py / p_value.r           # Wilcoxon signed-rank test
