@@ -16,7 +16,7 @@ from data import create_train_val_split
 @ck.option("--fold", type=str, required=True, help="Path to the trained model file")
 @ck.option("--edges_file", type=str, default="data/upheno_owl2vecstar_edges.tsv", help="Path to edges file")
 @ck.option("--n_neighbors", type=int, default=15, help="Number of neighbors for UMAP")
-@ck.option("--max_samples", type=int, default=10000, help="Maximum number of samples per phenotype type")
+@ck.option("--max_samples", type=int, default=50000, help="Maximum number of samples per phenotype type")
 def main(graph, fold, edges_file, n_neighbors, max_samples):
     """
     Generate a UMAP plot of Mouse (MP_) and Human (HP_) phenotype embeddings.
@@ -165,18 +165,40 @@ def main(graph, fold, edges_file, n_neighbors, max_samples):
     print("Extracting entity embeddings...")
     entity_to_id = triples_factory.entity_to_id
 
-    # Filter entities for Mouse and Human phenotypes
+    # Get phenotypes associated with test diseases
+    test_disease_phenotypes = set()
+    if graph3 or graph4:
+        for _, row in disease_phenotypes.iterrows():
+            if row['Disease'] in test_diseases:
+                test_disease_phenotypes.add(row['Phenotype'])
+
+    
+    # Filter entities for Mouse and Human phenotypes, genes, and diseases
     mp_entities = []
     hp_entities = []
+    gene_entities = []
+    disease_entities = []
+    other_entities = []
 
     for entity in entities:
         if "MP_" in entity:
             mp_entities.append(entity)
         elif "HP_" in entity:
             hp_entities.append(entity)
+        elif "MGI_" in entity and graph2:
+            gene_entities.append(entity)
+        elif "OMIM_" in entity and graph3:
+            disease_entities.append(entity)
+        else:
+            other_entities.append(entity)
 
     print(f"Found {len(mp_entities)} Mouse phenotypes (MP_)")
     print(f"Found {len(hp_entities)} Human phenotypes (HP_)")
+    if graph2:
+        print(f"Found {len(gene_entities)} Genes (MGI_)")
+    if graph3:
+        print(f"Found {len(disease_entities)} Diseases (OMIM_)")
+    print(f"Found {len(other_entities)} Other entities")
 
     # Sample if needed
     if len(mp_entities) > max_samples:
@@ -189,8 +211,23 @@ def main(graph, fold, edges_file, n_neighbors, max_samples):
         hp_entities = list(np.random.choice(hp_entities, max_samples, replace=False))
         print(f"Sampled {max_samples} Human phenotypes")
 
+    if graph2 and len(gene_entities) > max_samples:
+        np.random.seed(random_seed + 2)
+        gene_entities = list(np.random.choice(gene_entities, max_samples, replace=False))
+        print(f"Sampled {max_samples} Genes")
+
+    if graph3 and len(disease_entities) > max_samples:
+        np.random.seed(random_seed + 3)
+        disease_entities = list(np.random.choice(disease_entities, max_samples, replace=False))
+        print(f"Sampled {max_samples} Diseases")
+
+    if len(other_entities) > max_samples:
+        np.random.seed(random_seed + 4)
+        other_entities = list(np.random.choice(other_entities, max_samples, replace=False))
+        print(f"Sampled {max_samples} Other entities")
+
     # Get embeddings
-    selected_entities = mp_entities + hp_entities
+    selected_entities = mp_entities + hp_entities + gene_entities + disease_entities + other_entities
     selected_ids = th.tensor([entity_to_id[entity] for entity in selected_entities])
 
     with th.no_grad():
@@ -200,7 +237,7 @@ def main(graph, fold, edges_file, n_neighbors, max_samples):
 
     # Apply UMAP
     print("Applying UMAP...")
-    reducer = umap.UMAP(n_components=2, random_state=random_seed, n_neighbors=min(n_neighbors, len(selected_entities) - 1))
+    reducer = umap.UMAP(n_components=2, n_neighbors=min(n_neighbors, len(selected_entities) - 1))
     embeddings_2d = reducer.fit_transform(embeddings)
 
     # Create plot
@@ -209,14 +246,42 @@ def main(graph, fold, edges_file, n_neighbors, max_samples):
 
     # Plot Mouse phenotypes
     mp_count = len(mp_entities)
-    plt.scatter(embeddings_2d[:mp_count, 0], embeddings_2d[:mp_count, 1],
-                c='blue', label='Mouse Phenotypes (MP_)', alpha=0.6, s=20)
+    hp_count = len(hp_entities)
+    gene_count = len(gene_entities)
+    disease_count = len(disease_entities)
+    other_count = len(other_entities)
+
+    offset = 0
+    tiny_size = 0.05
+    small_size = 0.4
+    large_size = 0.8
+    plt.scatter(embeddings_2d[offset:offset+mp_count, 0], embeddings_2d[offset:offset+mp_count, 1],
+                c='blue', label='Mouse Phenotypes (MP_)', alpha=small_size, s=10)
 
     # Plot Human phenotypes
-    plt.scatter(embeddings_2d[mp_count:, 0], embeddings_2d[mp_count:, 1],
-                c='red', label='Human Phenotypes (HP_)', alpha=0.6, s=20)
+    offset += mp_count
+    plt.scatter(embeddings_2d[offset:offset+hp_count, 0], embeddings_2d[offset:offset+hp_count, 1],
+                c='orange', label='Human Phenotypes (HP_)', alpha=small_size, s=10)
 
-    plt.title('UMAP Visualization of Mouse and Human Phenotype Embeddings', fontsize=14)
+    # Plot Genes
+    if graph2 and gene_count > 0:
+        offset += hp_count
+        plt.scatter(embeddings_2d[offset:offset+gene_count, 0], embeddings_2d[offset:offset+gene_count, 1],
+                    c='green', label='Genes (MGI_)', alpha=small_size, s=10)
+
+    # Plot Diseases
+    if graph3 and disease_count > 0:
+        offset += gene_count
+        plt.scatter(embeddings_2d[offset:offset+disease_count, 0], embeddings_2d[offset:offset+disease_count, 1],
+                    c='purple', label='Diseases (OMIM_)', alpha=small_size, s=10)
+
+    # Plot Other entities
+    if other_count > 0:
+        offset += disease_count
+        plt.scatter(embeddings_2d[offset:offset+other_count, 0], embeddings_2d[offset:offset+other_count, 1],
+                    c='gray', label='Other entities', alpha=tiny_size, s=10)
+
+    plt.title('UMAP Visualization of Phenotypes, Genes, and Diseases', fontsize=14)
     plt.xlabel('UMAP Dimension 1', fontsize=12)
     plt.ylabel('UMAP Dimension 2', fontsize=12)
     plt.legend(fontsize=11)
@@ -230,8 +295,12 @@ def main(graph, fold, edges_file, n_neighbors, max_samples):
 
     # Also display some statistics
     print("\n=== Statistics ===")
-    print(f"Mouse phenotypes plotted: {len(mp_entities)}")
     print(f"Human phenotypes plotted: {len(hp_entities)}")
+    if graph2:
+        print(f"Genes plotted: {len(gene_entities)}")
+    if graph3:
+        print(f"Diseases plotted: {len(disease_entities)}")
+    print(f"Other entities plotted: {len(other_entities)}")
     print(f"Total entities plotted: {len(selected_entities)}")
     print(f"Embedding dimension: {embeddings.shape[1]}")
 

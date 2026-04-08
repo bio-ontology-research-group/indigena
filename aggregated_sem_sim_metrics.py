@@ -5,7 +5,7 @@ from evaluate_sem_sim import compute_metrics
 def print_as_tex(stats):
     string = ""
     for metric, stat in stats.items():
-        string += f"{stat['mean']:.2f} {{ \scriptsize $\\pm$ {stat['std']:.2f} }} & "
+        string += f"{stat['mean']:.2f}\std{{{stat['std']:.2f}}} & "
     string = string[:-2] + " \\\\"
     print(string)
 

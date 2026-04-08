@@ -123,7 +123,7 @@ def geneDisease = geneDiseaseFile.readLines().tail()*.split(',')
 def evalGenes = geneDisease.collect { it[0] }.unique().sort()
 
 
-testFile =new File(rootDir + "/gene_disease_folds/fold_" + options.fold + "/test.csv")
+testFile =new File(rootDir + "/gene_disease_folds/fold_" + options.fold + "/test_no_leakage.csv")
 def testPairs = []
 
 testFile.eachLine { line, lineNumber ->
