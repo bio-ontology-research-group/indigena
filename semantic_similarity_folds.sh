@@ -2,11 +2,10 @@ set -e
 
 # Define pairs of (pw, gw) values to iterate over
 pw_gw_pairs=(
-    # "resnik bma"
+    "resnik bma"
     "resnik bmm"
     "lin bma"
     "lin bmm"
-
 )
 
 # Iterate over each pair
