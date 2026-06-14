@@ -1,0 +1,37 @@
+command:
+- ${env}
+- ${interpreter}
+- ${program}
+- ${args}
+- --graph4
+method: grid
+metric:
+  goal: maximize
+  name: tmac_mrr
+parameters:
+  batch_size:
+    values:
+    - 2048
+    - 4096
+    - 8192
+  embedding_dim:
+    values:
+    - 100
+  fold:
+    values:
+    - 0
+  learning_rate:
+    values:
+    - 0.0001
+    - 0.00001
+  num_filters:
+    values:
+    - 100
+    - 200
+  mode:
+    values:
+    - transductive
+  pretrained_model:
+    values:
+    - transd
+program: kge_convkb.py
