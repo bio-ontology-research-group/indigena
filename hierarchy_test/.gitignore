@@ -1,0 +1,12 @@
+# Keep code; regenerate everything else via the scripts (reproducibility).
+data/
+logs/
+wandb/
+__pycache__/
+*.pyc
+*.bak
+*.bak.*
+scripts/*.bak
+# results: keep only the small aggregated degradation table
+results/
+RESULTS.md
