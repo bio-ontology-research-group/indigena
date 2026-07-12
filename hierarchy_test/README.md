@@ -1,175 +1,193 @@
-# hierarchy_test/ — is INDIGENA hierarchy-aware?
+# hierarchy_test: is INDIGENA hierarchy-aware?
 
-A **from-scratch, reproducible** benchmark testing whether INDIGENA's phenotype-embedding
-similarity degrades gracefully when disease query phenotypes are **generalised to their HP
-ancestors**, compared with a Resnik+BMA semantic-similarity baseline (Groovy/SLIB).
-
-The comparison is done **matched**: both methods score the *same* candidate gene pool and the
-*same* held-out test pairs, on the *same* (de-propagated, leak-filtered) gene profiles.
-
----
+We test whether INDIGENA's phenotype-embedding similarity degrades gracefully when we generalise
+disease query phenotypes to their HP ancestors, and we compare it against a Resnik+BMA
+semantic-similarity baseline (Groovy/SLIB). We match the two methods: both score the same
+candidate gene pool, the same held-out test pairs, and the same de-propagated, leak-filtered gene
+profiles.
 
 ## Key result (fold 0)
 
-**Leaf-only, leak-strict graph, matched pool = 4,491 genes / 330 pairs.**
-`k` = HP-ancestor abstraction depth of the disease query (`k=0` = unperturbed).
+Leaf-only graph, leak-strict, matched pool of 4,491 genes and 330 test pairs. `k` denotes the
+HP-ancestor abstraction depth of the disease query (`k=0` is unperturbed).
 
-**LEAKED scoring** (full gene profile at scoring time — `k=0` is the *control*: both methods
-find the gene from specific phenotypes):
+Leaked scoring uses the full gene profile at scoring time, so `k=0` is the control: both methods
+recover the causal gene from specific phenotypes.
 
 | method | k | MRR | H@1 | AUC | MR |
 |---|---|---|---|---|---|
 | INDIGENA | 0 | 0.682 | 0.609 | 0.995 | 22.3 |
-| INDIGENA | 3 | **0.042** | 0.000 | 0.953 | 217.4 |
+| INDIGENA | 3 | 0.042 | 0.000 | 0.953 | 217.4 |
 | Resnik | 0 | 0.707 | 0.609 | 0.998 | 11.7 |
-| Resnik | 3 | **0.298** | 0.194 | 0.983 | 82.0 |
+| Resnik | 3 | 0.298 | 0.194 | 0.983 | 82.0 |
 
-- At `k=0` the two methods are **matched** (MRR 0.68 vs 0.71, H@1 identical at 0.609).
-- Under abstraction **INDIGENA collapses** (MRR ↓16×, H@1 0.61→0.00) while **Resnik degrades
-  gracefully** (MRR ↓2.4×). At `k=3` Resnik is ~7× ahead on MRR. This is the hierarchy-awareness gap.
-- The collapse is **not** a propagation artifact: the de-propagated curve (0.682→0.042) matches
-  the original propagated one (0.765→0.049).
+At `k=0` the two methods match (MRR 0.682 vs 0.707, H@1 identical at 0.609). Under abstraction
+INDIGENA collapses (MRR falls 16-fold, H@1 from 0.609 to 0.000) while Resnik degrades gracefully
+(MRR falls 2.4-fold). At `k=3` Resnik ranks the causal gene 7 times higher on MRR. This gap
+quantifies hierarchy-awareness. The collapse is not a propagation artifact: the de-propagated
+curve (0.682 to 0.042) matches the original propagated curve (0.765 to 0.049).
 
-**LEAK-STRICT scoring** (leak-free): both methods sit at the floor at every `k`
-(INDIGENA MRR ~0.01, Resnik ~0.03, MR ~800/4491). With the leak removed there is **no baseline
-signal for either method**, which is why the leaked `k=0` is used as the control.
+Under leak-strict scoring (leak-free), both methods sit at the floor at every `k` (INDIGENA MRR
+near 0.010, Resnik near 0.030, MR near 800 of 4,491). Because the leak-free setting leaves no
+baseline signal for either method, we use the leaked `k=0` as the control.
 
-Aggregate over all 10 folds (mean±sd): `python scripts/aggregate_sweep.py`.
-
----
+Aggregate over the 10 folds (mean and standard deviation): `python scripts/aggregate_sweep.py`.
 
 ## The data
 
-Original INDIGENA and this experiment share the **same phenotype ontology backbone** (UPheno
-owl2vec* projection: HP/MP classes linked by `subClassOf`) and the **same disease side** (OMIM
-disease `--has_symptom-->` HP phenotype, from HPOA). The difference is entirely the **gene side**.
+Original INDIGENA and this experiment share the same phenotype ontology backbone (UPheno owl2vec*
+projection: HP and MP classes linked by `subClassOf`) and the same disease side (OMIM disease
+`has_symptom` HP phenotype, from HPOA). The difference is the gene side.
 
-| | **Original INDIGENA** | **This experiment (“Model H”, human)** |
+| | Original INDIGENA | This experiment (Model H, human) |
 |---|---|---|
-| Gene nodes | **Mouse** genes (MGI), ~16k | **Human** genes (NCBIGene), 4,837 |
-| Gene→phenotype | mouse `has_phenotype` **MP** terms, from **MGI** lab phenotyping | human `has_phenotype` **HP** terms, from HPOA `phenotype_to_genes` |
-| Provenance | **experimental**, independent of disease curation | **derived** from disease curation (gene inherits a disease's phenotypes) → *leaky* |
-| True-path propagation | **no** (0% of genes carry the MP root; ~14 terms/gene) | **yes** (86% carry HP root `HP_0000001`; ~100 terms/gene) |
-| Cross-species step | HP query ↔ mouse MP via UPheno; map gene→human via **HCOP** | none — ranks human genes directly |
+| Gene nodes | mouse genes (MGI), ~16k | human genes (NCBIGene), 4,837 |
+| Gene to phenotype | mouse `has_phenotype` MP terms, from MGI lab phenotyping | human `has_phenotype` HP terms, from HPOA `phenotype_to_genes` |
+| Provenance | experimental, independent of disease curation | derived from disease curation (the gene inherits a disease's phenotypes), therefore leaky |
+| True-path propagation | no (0% carry the MP root; ~14 terms per gene) | yes in the raw HPOA source (86% carry the HP root `HP_0000001`; ~100 terms per gene); Model H de-propagates it to leaf-only, ~27 terms per gene (Issue 2) |
+| Cross-species step | HP query to mouse MP via UPheno, then gene to human via HCOP | none; ranks human genes directly |
 
-### Why only 4,837 human genes (not ~20k)
-Human `gene→phenotype` annotations exist **only for genes with a curated Mendelian (OMIM)
-disease** (the phenotypes are propagated *from* the disease). No disease ⇒ no annotation ⇒ the
-gene has no profile and cannot be scored. So the human candidate pool is capped at disease genes
-(4,837). The mouse side gets ~16k genes because MGI phenotyping is experimental and
-disease-independent.
+### Why 4,837 human genes and not ~20k
 
-### Issue 1 — the leakage problem (`--leak_filter`)
-Human `gene→phenotype` edges are `gene→disease→phenotype` collapsed into one hop: a gene has a
-phenotype **only because** a disease it causes has that phenotype. Each edge stores its origin in
-`AttributedFromDiseases`. In the inductive split a test disease is held out and represented only
-by its query phenotypes, so a causal gene still wearing the phenotypes it inherited *from that
-test disease* is matched trivially — a leak.
+Human `gene to phenotype` annotations exist only for genes with a curated Mendelian (OMIM)
+disease, because HPOA propagates the phenotypes from the disease to the gene. A gene without a
+disease has no annotation, therefore no profile, and the model cannot score it. The human
+candidate pool is capped at disease genes (4,837). The mouse side reaches ~16k genes because MGI
+phenotyping is experimental and independent of disease.
 
-`--leak_filter strict` drops a `gene→phenotype` edge if **any** attributing disease is in the test
-fold. **This filter is applied in two places (both required):**
-- the **training graph** (embeddings are never trained on leaked edges), and
-- the **BMA scoring set** `gene2pheno` (`SCORING_LEAK_FILTER`, default = `--leak_filter`).
-  Without the second, the true gene keeps the test disease's phenotypes at scoring time and BMA
-  matches a copy of the answer (empirically: the true gene contained **100%** of the query terms
-  for 333/333 fold-0 pairs). Set `SCORING_LEAK_FILTER=none` to reproduce the leaked `k=0` control.
+### Issue 1: the leakage problem (`--leak_filter`)
 
-Genes whose *entire* profile came from test diseases drop out of the graph entirely (a gene enters
-the graph only via a surviving `has_phenotype` edge; a `gene→disease` edge cannot re-add it). Test
-pairs whose true gene drops out are excluded from evaluation.
+Human `gene to phenotype` edges are `gene to disease to phenotype` collapsed into one hop: a gene
+carries a phenotype only because a disease it causes carries that phenotype. Each edge stores its
+origin in `AttributedFromDiseases`. The inductive split holds out a test disease and represents
+it only by its query phenotypes, so a causal gene that still carries the phenotypes it inherited
+from that test disease matches trivially, which is the leak.
 
-### Issue 2 — true-path propagation (leaf-only de-propagation)
-HPOA `phenotype_to_genes` is distributed under the **true-path rule**: each gene is annotated to
-its specific terms *and all their ancestors* up to the root. This inflates the human gene side
-(86% of genes carry `HP_0000001`; ~100 terms/gene) while the disease query side and the mouse gene
-side are leaf-only. Abstracting the query onto ancestors then just matches terms nearly every gene
-already carries — confounding the hierarchy test.
+`--leak_filter strict` drops a `gene to phenotype` edge if any attributing disease belongs to the
+test fold. We apply the filter in two places, and both are required:
 
-`depropagate_gene_phenotypes.py` removes the propagated ancestors, keeping only the **most specific
-terms** per gene (drops 73.3%: 481,778 → 128,501 edges; ~100 → ~27 terms/gene). Provenance is
-preserved so the leak filter still works. **Model H uses the leaf-only file
-`gene_phenotypes_human_leafonly.csv`.**
+- the training graph, so the embeddings never train on leaked edges, and
+- the BMA scoring set `gene2pheno` (`SCORING_LEAK_FILTER`, default equal to `--leak_filter`).
+  Without the second, the causal gene keeps the test disease's phenotypes at scoring time and BMA
+  matches a copy of the answer: the causal gene contained 100% of the query terms for all 333
+  fold-0 pairs. Set `SCORING_LEAK_FILTER=none` to reproduce the leaked `k=0` control.
+
+A gene whose entire profile came from test diseases drops out of the graph, because a gene enters
+the graph only through a surviving `has_phenotype` edge and a `gene to disease` edge cannot re-add
+it. We exclude test pairs whose causal gene drops out.
+
+### Issue 2: true-path propagation (leaf-only de-propagation)
+
+HPOA `phenotype_to_genes` follows the true-path rule: it annotates each gene to its specific terms
+and to all their ancestors up to the root. This inflates the human gene side (86% of genes carry
+`HP_0000001`; ~100 terms per gene) while the disease query side and the mouse gene side stay
+leaf-only. When we then abstract the query to ancestors, it matches terms that almost every gene
+already carries, which confounds the hierarchy test.
+
+`depropagate_gene_phenotypes.py` removes the propagated ancestors and keeps only the most specific
+terms per gene (it drops 73.3%: 481,778 to 128,501 edges; ~100 to ~27 terms per gene). It
+preserves provenance, so the leak filter still applies. Model H uses the leaf-only file
+`gene_phenotypes_human_leafonly.csv`.
 
 ### Data sources (raw inputs)
-`scripts/00_download.sh` fetches these; base *derived* files come from the main INDIGENA pipeline.
+
+`scripts/00_download.sh` fetches these; base derived files come from the main INDIGENA workflow.
 
 | File | Source |
 |---|---|
 | `phenotype_to_genes.txt`, `genes_to_disease.txt`, `hp.obo` | HPO release (`HP_REL`, default `v2025-05-06`) |
-| `HMD_HumanPhenotype.rpt` | MGI (human↔mouse orthologs) |
-| `upheno.owl`, `upheno_owl2vecstar_edges.tsv` | UPheno owl2vec* projection (base pipeline) |
-| `disease_phenotypes.csv`, `gene_phenotypes.csv` (mouse), `gene_diseases.csv`, `gene_disease_folds/`, `phenotype.hpoa` | base INDIGENA pipeline (`data.py` / `generate_inductive_dataset.py`) |
+| `HMD_HumanPhenotype.rpt` | MGI (human-mouse orthologs) |
+| `upheno.owl`, `upheno_owl2vecstar_edges.tsv` | UPheno owl2vec* projection (base workflow) |
+| `disease_phenotypes.csv`, `gene_phenotypes.csv` (mouse), `gene_diseases.csv`, `gene_disease_folds/`, `phenotype.hpoa` | base INDIGENA workflow (`data.py`, `generate_inductive_dataset.py`) |
 
 ### Reproducible, self-contained data build
-Builds **everything under `hierarchy_test/data/`** — nothing symlinked to, or written into, the
-shared main-repo data dir. Base derived files are copied in from `$BASE_DATA`; the rest is
-downloaded and derived. Folds are **deterministic** (the unified 10-fold split is keyed on the
-existing mouse fold partition), so a rebuild reproduces the same folds.
+
+The build writes everything under `hierarchy_test/data/` and never symlinks to, or writes into,
+the shared main-repo data directory. It copies base derived files from `$BASE_DATA`, then
+downloads and derives the rest. The folds are deterministic, because the unified 10-fold split
+keys on the existing mouse fold partition, so a rebuild reproduces the same folds.
 
 ```bash
 cd hierarchy_test
 BASE_DATA=/path/to/main/indigena/data PY=$(which python) bash build_hierarchy_test_data.sh
 ```
-Steps: assemble base files → `00_download.sh` → `merge_human_gene_phenotypes.py` →
-`build_orthologs_and_folds.py` → `precompute_hpo_ancestors.py` → `build_abstracted_phenotypes.py`
-→ `depropagate_gene_phenotypes.py`.
 
----
+Steps: assemble base files, `00_download.sh`, `merge_human_gene_phenotypes.py`,
+`build_orthologs_and_folds.py`, `precompute_hpo_ancestors.py`, `build_abstracted_phenotypes.py`,
+`depropagate_gene_phenotypes.py`.
 
-## Pipeline (single fold, e.g. fold 0)
+## Workflow (single fold, e.g. fold 0)
 
 ```bash
-# 1. Train INDIGENA on the leaf-only, leak-strict graph; dump the matched pool + pairs.
+# 1. Train INDIGENA on the leaf-only, leak-strict graph; dump the matched pool and pairs.
 env GENE_PHENO_CSV=data/gene_phenotypes_human_leafonly.csv RUN_TAG=_leafonly \
     DUMP_MATCHED_DIR=data/matched_fold0 \
   python scripts/kge_transd_species.py --species human --leak_filter strict --fold 0 \
     --mode inductive --graph4 --embedding_dim 400 --batch_size 8192 --learning_rate 0.001 --no_sweep
 
-# 2. INDIGENA eval grid: scoring ∈ {leaked, strict} × k ∈ {0..3} (reuses the model, --only_test).
+# 2. INDIGENA eval grid: scoring in {leaked, strict} times k in {0..3} (reuses the model, --only_test).
 bash run_indigena_matched_evals.sh 0
 
-# 3. Resnik matched grid on the SAME pool/pairs (needs groovy + JAVA_HOME).
+# 3. Resnik matched grid on the same pool and pairs (needs groovy and JAVA_HOME).
 bash run_resnik_matched.sh 0
 
 # 4. Table.
 python scripts/aggregate_matched_fold0.py
 ```
 
-## 10-fold sweep on Ibex (SLURM)
+## 10-fold sweep
 
-`slurm_sweep.sh` runs one GPU task per fold (train → INDIGENA eval grid → Resnik grid), using the
-`indiga` conda env (direct interpreter path) and system `java-11` for groovy.
+We split the sweep by hardware: Ibex (SLURM, GPU) trains and evaluates INDIGENA, and the
+workstation runs the CPU-only Resnik baseline where groovy and SLIB are already configured.
+
+On Ibex, `slurm_sweep.sh` runs one GPU task per fold (train, then INDIGENA eval grid) using the
+`indiga` conda environment. Each task also writes the matched pool and pairs to
+`data/matched_fold{f}/`.
 
 ```bash
+# Ibex (glogin): build once, then submit the array. Requires --constraint=[v100|a100].
 cd /ibex/user/zhapacfp/indigena/hierarchy_test
 BASE_DATA=/ibex/user/zhapacfp/indigena/data PY=/home/zhapacfp/miniforge3/envs/indiga/bin/python \
-  bash build_hierarchy_test_data.sh          # once
-sbatch slurm_sweep.sh                         # array 0-9
-python scripts/aggregate_sweep.py             # mean±sd once folds land (runs mid-sweep too)
+  bash build_hierarchy_test_data.sh
+sbatch slurm_sweep.sh                          # array 0-9: train + INDIGENA eval
 ```
 
----
+On the workstation, `run_resnik_sweep_workstation.sh` pulls each fold's matched dump from Ibex
+(as the GPU job writes it) and runs the matched Resnik grid locally:
+
+```bash
+bash run_resnik_sweep_workstation.sh           # folds 0-9: sync dump from Ibex, run Resnik locally
+```
+
+To aggregate, co-locate both result sets on one host, because Ibex holds the INDIGENA result
+files (`data/results/`) and the workstation holds the Resnik result files
+(`data/baseline_results/`). Copy the INDIGENA results from Ibex to the workstation, then run:
+
+```bash
+python scripts/aggregate_sweep.py              # mean and sd across folds; runs mid-sweep as folds land
+```
 
 ## Scripts
 
 | Script | Role |
 |---|---|
-| `build_hierarchy_test_data.sh` | reproducible, self-contained data build (source → leaf-only + folds + abstracted) |
+| `build_hierarchy_test_data.sh` | reproducible, self-contained data build (source to leaf-only, folds, abstracted queries) |
 | `depropagate_gene_phenotypes.py` | leaf-only de-propagation (drop propagated ancestors, keep provenance) |
-| `merge_human_gene_phenotypes.py` | HPOA → human gene→phenotype edges + `AttributedFromDiseases` |
-| `build_orthologs_and_folds.py` | human gene→disease + HCOP + deterministic unified 10-fold split |
-| `precompute_hpo_ancestors.py` | `hp.obo` → depth-indexed HP ancestor map |
+| `merge_human_gene_phenotypes.py` | HPOA to human gene-phenotype edges with `AttributedFromDiseases` |
+| `build_orthologs_and_folds.py` | human gene-disease, HCOP orthologs, deterministic unified 10-fold split |
+| `precompute_hpo_ancestors.py` | `hp.obo` to depth-indexed HP ancestor map |
 | `build_abstracted_phenotypes.py` | replace each disease phenotype by its k-th HP ancestor (k=0..3) |
-| `kge_transd_species.py` | train/eval TransD; `--leak_filter` (graph) + `SCORING_LEAK_FILTER` (BMA set); `GENE_PHENO_CSV`, `RUN_TAG`, `DUMP_MATCHED_DIR`, `EVAL_DISEASE_PHENO_CSV`, `EVAL_TAG` |
-| `semantic_similarity_human.groovy` | Resnik+BMA (SLIB); env: `GENE_PHENO_CSV`, `LEAK_FILTER`, `CANDIDATES_FILE`, `TEST_PAIRS_CSV`, `PERTURB_DISEASE_CSV`, `PERTURB_TAG` |
-| `run_indigena_matched_evals.sh <fold>` | INDIGENA eval grid (leaked+strict × k=0..3) |
-| `run_resnik_matched.sh <fold>` | Resnik matched grid (leaked+strict × k=0..3) |
-| `slurm_sweep.sh` | SLURM array (folds 0-9): train + both eval grids |
-| `aggregate_matched_fold0.py` / `aggregate_sweep.py` | single-fold table / cross-fold mean±sd |
+| `kge_transd_species.py` | train and evaluate TransD; `--leak_filter` (graph) and `SCORING_LEAK_FILTER` (BMA set); `GENE_PHENO_CSV`, `RUN_TAG`, `DUMP_MATCHED_DIR`, `EVAL_DISEASE_PHENO_CSV`, `EVAL_TAG` |
+| `semantic_similarity_human.groovy` | Resnik+BMA (SLIB); env `GENE_PHENO_CSV`, `LEAK_FILTER`, `CANDIDATES_FILE`, `TEST_PAIRS_CSV`, `PERTURB_DISEASE_CSV`, `PERTURB_TAG` |
+| `run_indigena_matched_evals.sh <fold>` | INDIGENA eval grid (leaked and strict, k=0..3) |
+| `run_resnik_matched.sh <fold>` | Resnik matched grid (leaked and strict, k=0..3), workstation |
+| `run_resnik_sweep_workstation.sh` | workstation sweep: pull each fold's dump from Ibex, run Resnik locally |
+| `slurm_sweep.sh` | Ibex SLURM array (folds 0-9): train and INDIGENA eval |
+| `aggregate_matched_fold0.py`, `aggregate_sweep.py` | single-fold table, cross-fold mean and sd |
 
 ## Key data artifacts (under `data/`, all self-contained)
 
-`gene_phenotypes_human.csv` (propagated, with provenance) · `gene_phenotypes_human_leafonly.csv`
-(**used by Model H**) · `gene_diseases_human.csv` · `gene_disease_folds_unified/fold_{0..9}/` ·
-`hpo_ancestors.json` · `disease_phenotypes_hp_k{0..3}.csv` · `matched_fold{f}/` (candidate pool +
-test pairs dumped by training, consumed by Resnik).
+`gene_phenotypes_human.csv` (propagated, with provenance), `gene_phenotypes_human_leafonly.csv`
+(used by Model H), `gene_diseases_human.csv`, `gene_disease_folds_unified/fold_{0..9}/`,
+`hpo_ancestors.json`, `disease_phenotypes_hp_k{0..3}.csv`, `matched_fold{f}/` (candidate pool and
+test pairs, written by training and read by Resnik).

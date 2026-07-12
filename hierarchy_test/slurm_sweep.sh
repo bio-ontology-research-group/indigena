@@ -11,7 +11,7 @@
 #SBATCH -o logs/hdig.%A_%a.out
 #SBATCH -e logs/hdig.%A_%a.err
 #SBATCH --mail-user=fernando.zhapacamacho@kaust.edu.sa
-#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-type=FAIL
 #SBATCH --time=05:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:1
@@ -20,7 +20,7 @@
 set -o pipefail
 HT=/ibex/user/zhapacfp/indigena/hierarchy_test
 cd "$HT"
-mkdir -p logs
+mkdir -p logs data/results data/models data/baseline_results
 FOLD=${SLURM_ARRAY_TASK_ID}
 
 # --- environment: indiga conda env + groovy/java (SLIB Resnik) ---
@@ -43,7 +43,5 @@ env GENE_PHENO_CSV=data/gene_phenotypes_human_leafonly.csv RUN_TAG=_leafonly DUM
 echo "[fold $FOLD] INDIGENA eval grid (leaked+strict x k0-3) $(date)"
 PY=$PY bash run_indigena_matched_evals.sh ${FOLD}          # no explicit GPU -> inherit SLURM's
 
-echo "[fold $FOLD] RESNIK matched grid (leaked+strict x k0-3) $(date)"
-GROOVY=$GROOVY bash run_resnik_matched.sh ${FOLD}
-
-echo "[fold $FOLD] DONE $(date)"
+# Resnik (CPU-only) runs as a separate per-fold job: slurm_resnik.sh (aftercorr dependency).
+echo "[fold $FOLD] GPU DONE (train+eval) $(date)"

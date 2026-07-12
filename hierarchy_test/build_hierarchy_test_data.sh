@@ -13,7 +13,7 @@ set -euo pipefail
 cd "$(dirname "$0")"                       # hierarchy_test/
 PY=${PY:-python}
 BASE_DATA=${BASE_DATA:-../data}
-mkdir -p data logs
+mkdir -p data logs data/results data/models data/baseline_results
 
 echo "== [1/6] assemble base derived files as SELF-CONTAINED copies from $BASE_DATA =="
 for f in upheno.owl upheno_owl2vecstar_edges.tsv disease_phenotypes.csv \
