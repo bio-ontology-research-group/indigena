@@ -120,7 +120,7 @@ def main(species, fold, graph2, graph3, graph4, projector_name, mode,
         gene_pheno_file = "data/gene_phenotypes.csv"
         gene_disease_file = "data/gene_diseases.csv"
     else:
-        gene_pheno_file = "data/gene_phenotypes_human.csv"
+        gene_pheno_file = os.environ.get("GENE_PHENO_CSV", "data/gene_phenotypes_human.csv")
         gene_disease_file = "data/gene_diseases_human.csv"
 
     train_disease_genes = pd.read_csv(f"{FOLD_BASE}/fold_{fold}/{species}_train.csv")
@@ -231,7 +231,7 @@ def main(species, fold, graph2, graph3, graph4, projector_name, mode,
     aug_tag = f"_aug-d{ancestor_augment_depth}" if ancestor_augment_depth > 0 else ""
     file_identifier = (f"transd_{species}_{mode}_fold_{fold}_seed_{random_seed}"
                        f"_dim_{embedding_dim}_bs_{batch_size}_lr_{learning_rate}_{graph_status}"
-                       f"{leak_tag}{aug_tag}")
+                       f"{leak_tag}{aug_tag}{os.environ.get('RUN_TAG', '')}")
     model_out_filename = f"data/models/{file_identifier}.pt"
 
     # Build gene2pheno + disease2pheno restricted to phenotypes that exist in
@@ -246,6 +246,18 @@ def main(species, fold, graph2, graph3, graph4, projector_name, mode,
         n_g2p_in += 1
         if row['Phenotype'] not in known_entities:
             continue
+        # Apply a leak filter to the BMA scoring set. By default it mirrors the
+        # graph's --leak_filter so 'leak-strict' is actually leak-free at scoring
+        # (a test disease's causal gene otherwise keeps the exact phenotypes it
+        # inherited from that held-out disease and BMA matches it trivially).
+        # Decoupled via SCORING_LEAK_FILTER so the leaked k=0 'control' can be
+        # reproduced (SCORING_LEAK_FILTER=none) while the graph stays leak-strict.
+        scoring_leak = os.environ.get('SCORING_LEAK_FILTER', leak_filter)
+        if species == 'human' and scoring_leak != 'none':
+            _attr = set(str(row['AttributedFromDiseases']).split(';'))
+            if (_attr.issubset(test_diseases) if scoring_leak == 'light'
+                    else bool(_attr & test_diseases)):
+                continue
         gene2pheno.setdefault(row['Gene'], []).append(row['Phenotype'])
         n_g2p_kept += 1
     disease2pheno = dict()
@@ -279,7 +291,23 @@ def main(species, fold, graph2, graph3, graph4, projector_name, mode,
         test_disease_genes['Gene'].isin(eval_genes)
     ].reset_index(drop=True)
     logger.info(f"[test_pairs/{species}] in={n_test_pairs_in} kept={len(test_disease_genes)}")
+    if os.environ.get("DUMP_MATCHED_DIR"):
+        _dd = os.environ["DUMP_MATCHED_DIR"]; os.makedirs(_dd, exist_ok=True)
+        with open(f"{_dd}/candidates_{species}_fold{fold}.txt", "w") as _cf:
+            _cf.write("\n".join(eval_genes) + "\n")
+        test_disease_genes[["Gene", "Disease"]].to_csv(f"{_dd}/pairs_{species}_fold{fold}.csv", index=False)
+        logger.info(f"[DUMP_MATCHED] {len(eval_genes)} candidates + {len(test_disease_genes)} pairs -> {_dd}")
 
+    # Filter validation pairs to genes present in the (possibly leak/leaf-pruned)
+    # graph and diseases with phenotypes, mirroring the test_disease_genes filter
+    # above; otherwise evaluate_model's gene_to_index[test_gene] KeyErrors on a
+    # val positive whose gene dropped out of eval_genes.
+    _n_val_in = len(val_disease_genes)
+    val_disease_genes = val_disease_genes[
+        val_disease_genes['Disease'].isin(disease2pheno.keys()) &
+        val_disease_genes['Gene'].isin(eval_genes)
+    ].reset_index(drop=True)
+    logger.info(f"[val_pairs/{species}] in={_n_val_in} kept={len(val_disease_genes)}")
     validation_stopper = ValidationStopper(
         model, triples_factory, file_identifier, val_disease_genes,
         gene2pheno, disease2pheno, eval_genes, mode, graph3, graph4,

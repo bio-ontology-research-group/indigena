@@ -96,31 +96,72 @@ classes.each { cls ->
 logger.info("Obtaining Gene-Phenotype associations from MGI_GenePheno.rpt. Genes are represented as MGI IDs and Phenotypes are represented as MP IDs")
 def gene2pheno = new HashMap()
 
-def mgiGenePhenoFile = new File(rootDir + "/gene_phenotypes_human.csv")
+// Gene->phenotype source. Override with GENE_PHENO_CSV to point at, e.g., the
+// leaf-only (de-propagated) file produced by depropagate_gene_phenotypes.py.
+def genePhenoPath = System.getenv("GENE_PHENO_CSV") ?: (rootDir + "/gene_phenotypes_human.csv")
+logger.info("Gene->phenotype file: ${genePhenoPath}")
+def mgiGenePhenoFile = new File(genePhenoPath)
 def mgiGenePheno = mgiGenePhenoFile.readLines()*.split(',')
 
+// Strict leak filter (matches INDIGENA kge_transd_species.py): drop a
+// gene->phenotype edge if ANY of its AttributedFromDiseases (column 3,
+// ';'-separated) is in this fold's test set. Applied only when the file carries
+// provenance (human 3-column format). Disable with LEAK_FILTER=none.
+def leakFilterOn = (System.getenv("LEAK_FILTER") ?: "strict") != "none"
+def leakTestDiseases = new HashSet()
+if (leakFilterOn) {
+    def tdFile = new File(rootDir + "/gene_disease_folds_unified/fold_" + options.fold + "/test_diseases.txt")
+    if (tdFile.exists()) tdFile.eachLine { l -> if (l.trim()) leakTestDiseases.add(l.trim()) }
+    logger.info("Leak filter ON (strict): ${leakTestDiseases.size()} test diseases, fold ${options.fold}")
+}
+
+def n_gp_leak = 0
 mgiGenePheno.each { line ->
     def gene = line[0]
     def phenotype = line[1]
-    
     if (phenotype in existingHpPhenotypes) {
+	if (leakFilterOn && line.length >= 3) {
+	    def attributed = line[2].split(';') as Set
+	    if (attributed.any { leakTestDiseases.contains(it) }) { n_gp_leak++; return }
+	}
 	if (!gene2pheno.containsKey(gene)) {
 	    gene2pheno[gene] = new HashSet()
 	}
-	gene2pheno[gene].add(phenotype)            
+	gene2pheno[gene].add(phenotype)
     }
-    
+
 }
+logger.info("gene2pheno: dropped ${n_gp_leak} leaky gene->phenotype edges (attributed to a test disease)")
 
 logger.info("gene2pheno size: ${gene2pheno.size()}")
 logger.info("gene2pheno example: ${gene2pheno.take(1)}")
 
-def geneDiseaseFile = new File(rootDir + "/gene_diseases_human.csv")
-def geneDisease = geneDiseaseFile.readLines().tail()*.split(',')
-def evalGenes = geneDisease.collect { it[0] }.unique().sort()
+// Candidate gene pool. Override with CANDIDATES_FILE (one gene URI per line) to
+// match INDIGENA's exact leak/leaf-pruned pool; else all disease-associated genes.
+def candidatesPath = System.getenv("CANDIDATES_FILE")
+def evalGenes
+if (candidatesPath) {
+    evalGenes = new File(candidatesPath).readLines().findAll { it.trim() }.collect { it.trim() }.unique().sort()
+    logger.info("evalGenes from CANDIDATES_FILE ${candidatesPath}: ${evalGenes.size()} genes")
+} else {
+    def geneDiseaseFile = new File(rootDir + "/gene_diseases_human.csv")
+    def geneDisease = geneDiseaseFile.readLines().tail()*.split(',')
+    evalGenes = geneDisease.collect { it[0] }.unique().sort()
+}
+// Keep only genes with a (leak-filtered) phenotype profile, else BMA over an
+// empty set NPEs; log any divergence from the requested pool.
+def _evalBefore = evalGenes.size()
+evalGenes = evalGenes.findAll { gene2pheno.containsKey(it) && !gene2pheno[it].isEmpty() }
+if (evalGenes.size() != _evalBefore) {
+    logger.info("evalGenes pruned to scorable: ${_evalBefore} -> ${evalGenes.size()}")
+}
 
 
-testFile =new File(rootDir + "/gene_disease_folds_unified/fold_" + options.fold + "/human_test.csv")
+// Test pairs. Override with TEST_PAIRS_CSV (Gene,Disease header) to match the
+// exact set INDIGENA evaluated; else the fold's full human_test.csv.
+def testPairsPath = System.getenv("TEST_PAIRS_CSV") ?: (rootDir + "/gene_disease_folds_unified/fold_" + options.fold + "/human_test.csv")
+logger.info("Test pairs file: ${testPairsPath}")
+testFile = new File(testPairsPath)
 def testPairs = []
 
 testFile.eachLine { line, lineNumber ->
