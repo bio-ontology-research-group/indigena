@@ -6,32 +6,39 @@ semantic-similarity baseline (Groovy/SLIB). We match the two methods: both score
 candidate gene pool, the same held-out test pairs, and the same de-propagated, leak-filtered gene
 profiles.
 
-## Key result (fold 0)
+## Key result (10-fold cross-validation)
 
-Leaf-only graph, leak-strict, matched pool of 4,491 genes and 330 test pairs. `k` denotes the
-HP-ancestor abstraction depth of the disease query (`k=0` is unperturbed).
+Leaf-only graph, leak-strict, matched candidate pool (~4,500 genes per fold) and matched held-out
+test pairs. `k` denotes the HP-ancestor abstraction depth of the disease query (`k=0` is
+unperturbed). We report the mean and standard deviation over the 10 disease-disjoint folds.
 
 Leaked scoring uses the full gene profile at scoring time, so `k=0` is the control: both methods
 recover the causal gene from specific phenotypes.
 
 | method | k | MRR | H@1 | AUC | MR |
 |---|---|---|---|---|---|
-| INDIGENA | 0 | 0.682 | 0.609 | 0.995 | 22.3 |
-| INDIGENA | 3 | 0.042 | 0.000 | 0.953 | 217.4 |
-| Resnik | 0 | 0.707 | 0.609 | 0.998 | 11.7 |
-| Resnik | 3 | 0.298 | 0.194 | 0.983 | 82.0 |
+| INDIGENA | 0 | 0.702 ± 0.037 | 0.621 ± 0.040 | 0.996 ± 0.002 | 18.8 ± 9.9 |
+| INDIGENA | 1 | 0.357 ± 0.067 | 0.267 ± 0.064 | 0.980 ± 0.012 | 94.6 ± 57.0 |
+| INDIGENA | 2 | 0.107 ± 0.061 | 0.047 ± 0.032 | 0.938 ± 0.061 | 282.3 ± 273.2 |
+| INDIGENA | 3 | 0.031 ± 0.017 | 0.004 ± 0.004 | 0.894 ± 0.097 | 478.8 ± 436.5 |
+| Resnik | 0 | 0.725 ± 0.018 | 0.640 ± 0.022 | 0.999 ± 0.000 | 7.2 ± 2.3 |
+| Resnik | 1 | 0.599 ± 0.015 | 0.498 ± 0.020 | 0.997 ± 0.001 | 16.0 ± 5.3 |
+| Resnik | 2 | 0.460 ± 0.020 | 0.350 ± 0.023 | 0.993 ± 0.002 | 34.2 ± 11.2 |
+| Resnik | 3 | 0.300 ± 0.016 | 0.198 ± 0.018 | 0.986 ± 0.002 | 63.3 ± 9.5 |
 
-At `k=0` the two methods match (MRR 0.682 vs 0.707, H@1 identical at 0.609). Under abstraction
-INDIGENA collapses (MRR falls 16-fold, H@1 from 0.609 to 0.000) while Resnik degrades gracefully
-(MRR falls 2.4-fold). At `k=3` Resnik ranks the causal gene 7 times higher on MRR. This gap
-quantifies hierarchy-awareness. The collapse is not a propagation artifact: the de-propagated
+At `k=0` the two methods match (MRR 0.702 vs 0.725, H@1 0.621 vs 0.640). Under abstraction INDIGENA
+collapses (MRR falls 23-fold, H@1 from 0.621 to 0.004) while Resnik degrades gracefully (MRR falls
+2.4-fold). At `k=3` Resnik ranks the causal gene 10-fold higher on MRR (0.300 vs 0.031). This gap
+quantifies hierarchy-awareness, and Resnik holds a tight fold-to-fold variance (standard deviation
+near 0.017 at every `k`). The collapse is not a propagation artifact: the de-propagated fold-0
 curve (0.682 to 0.042) matches the original propagated curve (0.765 to 0.049).
 
 Under leak-strict scoring (leak-free), both methods sit at the floor at every `k` (INDIGENA MRR
-near 0.010, Resnik near 0.030, MR near 800 of 4,491). Because the leak-free setting leaves no
+near 0.010, Resnik near 0.025, MR above 890 of ~4,500). Because the leak-free setting leaves no
 baseline signal for either method, we use the leaked `k=0` as the control.
 
-Aggregate over the 10 folds (mean and standard deviation): `python scripts/aggregate_sweep.py`.
+Reproduce the table: `python scripts/aggregate_sweep.py` (reads `data/results` and
+`data/baseline_results`); the full output is saved to `results/degradation_sweep_fold0-9.txt`.
 
 ## The data
 
